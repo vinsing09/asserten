@@ -74,6 +74,24 @@ asserten/
 - `.claude-plugin/plugin.json` v0.1.0 manifest.
 - `.gitignore` covers `__pycache__/`, `.asserten/`, `asserten-session.json`, `.env`.
 
+### 2026-04-26 — v0.1 build complete (autonomous overnight)
+- Backend gap-fills shipped on agentops-backend `v2-behavioral-contracts` (commit `a4afe0f`):
+  - `routers/optimize.py` — `POST /agents/{aid}/optimize/light` wrapping pick-best logic.
+  - `services/auth_middleware.py` — `X-Asserten-Key` middleware (no-op when env unset, gates POST/PUT/PATCH/DELETE when set).
+  - 15 unit tests + curl smoke confirmed live endpoint returns 200.
+- Asserten code shipped (initial commit `67fbe03` on master):
+  - 4 client modules: `api.py` (191 ln), `format.py` (112 ln), `models.py` (142 ln), `session.py` (83 ln). All ≤200 lines per spec.
+  - `client/cli.py` (195 ln) — subprocess dispatcher slash commands shell into. Uses `select()` with 50ms timeout to avoid stdin block when invoked without piped input.
+  - 11 slash commands in `.claude-plugin/commands/`: status/reset/ingest/audit/select/eval/failures/optimize-light/optimize-deep/compare/run + umbrella.
+  - 60 unit tests + 4 E2E (skipped without env). Full suite: **64 pass in 1.46s** with E2E env set.
+- Live CLI smoke against backend confirmed:
+  - `/asserten-status` renders state correctly
+  - `/asserten-optimize-light` returns chosen v2a + delta
+  - `/asserten-eval v0` ran real eval, returned `94% pass (62/66, judge_err 0%)`
+  - `/asserten-compare` renders 4-way table
+- `MORNING_CHECKLIST.md` documents the 5 actions a human must do (gh repo create, ngrok, set ASSERTEN_API_KEY in backend `.env`, restart backend, smoke).
+- Known v0.1 limits: failures view is a stub, LIGHT requires manual `candidate_v1_ids` (no audit-bulk yet), DEEP optimize requires manual `eval_run_id`. All flagged in README + commands.
+
 ## Open questions / things deliberately deferred
 
 - **K candidates for LIGHT optimization:** v0.1 plugin assumes the user has already run `/asserten-audit` multiple times to populate K candidate v1s. Future: an `/asserten-audit-bulk K=10` command that does this in one call.
