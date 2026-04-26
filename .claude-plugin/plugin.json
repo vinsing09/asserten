@@ -1,0 +1,11 @@
+{
+  "name": "asserten",
+  "version": "0.1.0",
+  "description": "Drive an agentops-backend agent through contract → tests → audit → patch select → eval → LIGHT/DEEP optimize → 4-way compare. All steps as /asserten-* slash commands.",
+  "author": "asserten",
+  "license": "MIT",
+  "homepage": "https://github.com/USER/asserten",
+  "compatible_with": ["claude-code"],
+  "minimum_claude_code_version": "1.0.0",
+  "commands_dir": "commands"
+}
