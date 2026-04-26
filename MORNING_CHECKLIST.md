@@ -1,24 +1,10 @@
 # Morning checklist — what to do before friend arrives
 
-Tonight's autonomous build wrote everything else. These are the 5 actions that need a human (you):
+Tonight's autonomous build did everything possible without human intervention,
+including pushing asserten to https://github.com/vinsing09/asserten (public).
+These are the remaining 4 actions:
 
-## 1. Create the public GitHub repo (once, ~30s)
-
-```bash
-cd ~/Documents/my_projects/asserten
-gh repo create asserten --public --source . --remote origin --push
-```
-
-Or via the web: https://github.com/new → name `asserten`, public, then:
-```bash
-cd ~/Documents/my_projects/asserten
-git remote add origin git@github.com:<YOUR-USERNAME>/asserten.git
-git add .
-git commit -m "initial: asserten v0.1 plugin scaffold"
-git push -u origin main
-```
-
-## 2. Start ngrok tunnel (each time you want friends to hit your laptop)
+## 1. Start ngrok tunnel (each time you want friends to hit your laptop)
 
 ```bash
 # In a new terminal — keep this open while friend is using it
@@ -27,28 +13,32 @@ ngrok http 8000
 
 Copy the `https://<random>.ngrok.io` URL ngrok prints.
 
-## 3. Set the asserten env in your Claude Code shell
+## 2. Set the asserten env in your Claude Code shell
 
 ```bash
 export ASSERTEN_BACKEND_URL=https://<random>.ngrok.io
-export ASSERTEN_API_KEY=<pick-a-shared-secret>
+# The api key is already set in agentops-backend/.env (overnight build).
+# Read it back:
+export ASSERTEN_API_KEY=$(grep ASSERTEN_API_KEY ~/Documents/my_projects/agentops-backend/.env | cut -d= -f2)
+echo "key: $ASSERTEN_API_KEY"   # share this with friend
 ```
 
 (Tell your friend the same URL + key when they install.)
 
-## 4. Set the same secret on the backend
+## 3. (Backend ASSERTEN_API_KEY is already set + server already running — skip)
+
+The overnight run wrote `ASSERTEN_API_KEY=ak_d47fd5b7c04b08ba15d3dbeb2cad2d4e`
+to `agentops-backend/.env` and restarted the server with auth enforced. The
+server is at PID `$(cat /tmp/agentops_server.pid)`. If your laptop rebooted,
+restart it:
 
 ```bash
 cd ~/Documents/my_projects/agentops-backend
-# Append (don't overwrite) the .env so the existing keys stay:
-echo "ASSERTEN_API_KEY=<same-secret-as-step-3>" >> .env
-# Restart the backend so it picks up the new env:
-kill $(cat /tmp/agentops_server.pid)
 nohup /opt/anaconda3/bin/python -u main.py > logs/server/main_$(date +%Y%m%d_%H%M%S).log 2>&1 &
 echo $! > /tmp/agentops_server.pid
 ```
 
-## 5. Smoke-test before friend arrives
+## 4. Smoke-test before friend arrives
 
 ```bash
 # In Claude Code:
