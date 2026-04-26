@@ -16,7 +16,7 @@ def client():
 
 
 @respx.mock
-def test_create_agent_draft_sends_auth_header(client):
+def test_create_agent_draft_sends_auth_header_and_correct_field(client):
     route = respx.post(f"{BACKEND}/agents/draft").mock(
         return_value=httpx.Response(200, json={"id": "draft1"})
     )
@@ -25,6 +25,10 @@ def test_create_agent_draft_sends_auth_header(client):
     )
     assert out["id"] == "draft1"
     assert route.calls.last.request.headers["X-Asserten-Key"] == "secret"
+    # Backend wants `system_prompt` — confirm we translate at the boundary.
+    body = route.calls.last.request.read().decode()
+    assert '"system_prompt": "prompt"' in body
+    assert '"raw_system_prompt"' not in body
 
 
 @respx.mock
@@ -98,11 +102,16 @@ def test_optimize_light_parses_result(client):
 
 @respx.mock
 def test_optimize_deep_returns_job(client):
-    respx.post(f"{BACKEND}/agents/a/versions/v/improvements").mock(
-        return_value=httpx.Response(200, json={"job_id": "j1", "status": "queued"})
-    )
+    """Backend takes eval_run_id + mode as query params, not body."""
+    route = respx.post(
+        url__regex=rf"{BACKEND}/agents/a/versions/v/improvements\?.*"
+    ).mock(return_value=httpx.Response(200, json={"job_id": "j1", "status": "queued"}))
     j = client.optimize_deep("a", "v", "er1")
     assert j["job_id"] == "j1"
+    # confirm both query params on the wire
+    last_url = str(route.calls.last.request.url)
+    assert "eval_run_id=er1" in last_url
+    assert "mode=deep" in last_url
 
 
 @respx.mock

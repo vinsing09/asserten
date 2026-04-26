@@ -63,10 +63,16 @@ class AssertenClient:
                            tool_schemas: list[dict],
                            business_goal: str = "",
                            desired_behaviors: list[str] | None = None) -> dict:
-        """POST /agents/draft → returns the draft (id is what audit uses)."""
+        """POST /agents/draft → returns the draft (id is what audit uses).
+
+        Backend's CreateDraftRequest field is `system_prompt`; the asserten
+        client uses `raw_system_prompt` to make the user-facing intent
+        explicit (this is the user's pre-audit prompt). Translate at the
+        boundary so the rest of the app stays consistent.
+        """
         return self._request("POST", "/agents/draft", json_body={
             "name": name,
-            "raw_system_prompt": raw_system_prompt,
+            "system_prompt": raw_system_prompt,
             "tool_schemas": tool_schemas,
             "business_goal": business_goal,
             "desired_behaviors": desired_behaviors or [],
@@ -77,11 +83,26 @@ class AssertenClient:
         return self._request("POST", f"/agents/draft/{draft_id}/audit",
                              timeout=300)
 
-    def commit_draft(self, draft_id: str, accepted_fix_ids: list[str]) -> Agent:
-        """POST /agents/draft/{id}/commit → real Agent + v0 version_id."""
+    def commit_draft(self, draft_id: str,
+                     accepted_fix_ids: list[str]) -> tuple[Agent, str]:
+        """POST /agents/draft/{id}/commit → (Agent, v1_version_id).
+
+        Backend returns `{agent_id, version_id, agent_name, fixes_applied,
+        system_prompt_preview, kind, ...}`. The version_id is the v1 produced
+        by applying the accepted fixes — it's a v1 not v0 because the audit
+        already mutated the prompt. We treat it as v1 in asserten and
+        synthesize v0 separately if the user wants a raw-prompt baseline.
+        """
         d = self._request("POST", f"/agents/draft/{draft_id}/commit",
-                          json_body={"accepted_fix_ids": accepted_fix_ids})
-        return Agent.from_api(d if "id" in d else d.get("agent", d))
+                          json_body={"accepted_fix_ids": accepted_fix_ids},
+                          timeout=300)
+        agent = Agent(
+            id=d.get("agent_id", ""),
+            name=d.get("agent_name", ""),
+            business_goal="",
+        )
+        v1_version_id = d.get("version_id", "")
+        return agent, v1_version_id
 
     def get_agent(self, agent_id: str) -> Agent:
         return Agent.from_api(self._request("GET", f"/agents/{agent_id}"))
@@ -150,13 +171,13 @@ class AssertenClient:
 
     def optimize_deep(self, agent_id: str, version_id: str,
                       eval_run_id: str) -> dict:
-        """POST /improvements?mode=deep returns a job_id; caller polls."""
-        return self._request(
-            "POST",
-            f"/agents/{agent_id}/versions/{version_id}/improvements",
-            json_body={"mode": "deep", "eval_run_id": eval_run_id},
-            timeout=60,
-        )
+        """POST /improvements?mode=deep returns a job_id; caller polls.
+
+        Backend takes eval_run_id + mode as query params (not body).
+        """
+        path = (f"/agents/{agent_id}/versions/{version_id}/improvements"
+                f"?eval_run_id={eval_run_id}&mode=deep")
+        return self._request("POST", path, timeout=60)
 
     def poll_improvement_job(self, job_id: str) -> dict:
         return self._request("GET", f"/improvements/jobs/{job_id}")

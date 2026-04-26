@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 import traceback
 
 from client.api import AssertenClient, AssertenError
@@ -84,7 +85,12 @@ def cmd_audit(args: dict) -> str:
 
 
 def cmd_select(args: dict) -> str:
-    """args: {answer: 'all' | 'none' | '1,3,5'}"""
+    """args: {answer: 'all' | 'none' | '1,3,5'}
+
+    Single commit produces both v0 ("original") and v1 ("Audited") on
+    the same agent automatically. We just look up v0's id from the
+    versions list afterwards.
+    """
     state = load_session()
     if not state.suggested_patches:
         return "No suggested patches in session. Run `/asserten-audit` first."
@@ -93,19 +99,40 @@ def cmd_select(args: dict) -> str:
         return "Reply with `all`, `none`, or `1,3,5`. Patches still pending."
     indices = parse_patch_selection(answer, len(state.suggested_patches))
     accepted = [state.suggested_patches[i]["id"] for i in indices]
-    if not accepted:
-        return "No patches selected (treated as `none`). v1 will equal v0."
+
     c = _client(state)
-    agent = c.commit_draft(state.draft_id, accepted_fix_ids=accepted)
+    agent, v1_id = c.commit_draft(state.draft_id, accepted_fix_ids=accepted)
     versions = c.list_versions(agent.id)
-    v0 = versions[0].id if versions else ""
+    v0_id = next((v.id for v in versions if v.version_number == 0), v1_id)
     update_session(
         agent_id=agent.id, agent_name=agent.name or state.agent_name,
-        accepted_patch_ids=accepted, v0_version_id=v0,
+        accepted_patch_ids=accepted, v0_version_id=v0_id, v1_version_id=v1_id,
     )
-    return (f"**v0 committed:** agent `{agent.id[:8]}` ({agent.name}), "
-            f"version `{v0[:8]}`, {len(accepted)} patches accepted. "
-            f"Next: `/asserten-eval v0`.")
+    fixes_label = ("0 fixes (v1 = v0)" if not accepted
+                   else f"{len(accepted)} fixes")
+    return (f"**Created:** v0 `{v0_id[:8]}` (raw), "
+            f"v1 `{v1_id[:8]}` ({fixes_label}) on agent "
+            f"`{agent.id[:8]}`. Next: `/asserten-prepare-eval` then "
+            f"`/asserten-eval v0` and `v1`.")
+
+
+def cmd_prepare_eval(args: dict) -> str:
+    """Generate contract + test cases on v1 — required before any eval."""
+    state = load_session()
+    if not state.v1_version_id:
+        return "No v1 yet. Run `/asserten-select` first."
+    c = _client(state)
+    t0 = time.monotonic()
+    contract = c.generate_contract(state.agent_id, state.v1_version_id)
+    t1 = time.monotonic()
+    tcs = c.generate_test_cases(state.agent_id, state.v1_version_id)
+    n_tcs = tcs.get("count") if isinstance(tcs, dict) else 0
+    t2 = time.monotonic()
+    return (f"**Eval prep complete:**\n"
+            f"- contract: {len(contract.get('obligations', []))} obligations "
+            f"({t1 - t0:.1f}s)\n"
+            f"- test cases: {n_tcs} generated ({t2 - t1:.1f}s)\n\n"
+            f"Now run `/asserten-eval v0` and `/asserten-eval v1`.")
 
 
 def cmd_eval(args: dict) -> str:
@@ -147,22 +174,19 @@ def cmd_optimize_light(args: dict) -> str:
 def cmd_optimize_deep(args: dict) -> str:
     state = load_session()
     if not state.v1_version_id:
-        return "No v1 version in session. Run `/asserten-select` first."
-    c = _client(state)
-    # Look up the most recent eval_run for v1 — needed by /improvements.
-    versions = c.list_versions(state.agent_id)
+        return "No v1. Run `/asserten-select` first."
     eval_run_id = args.get("eval_run_id", "")
     if not eval_run_id:
-        return ("Pass `eval_run_id` from `/asserten-eval v1` output. "
-                "(v0.1 manual lookup; future versions will auto-resolve.)")
+        return "Pass `eval_run_id` from `/asserten-eval v1`."
+    c = _client(state)
     job = c.optimize_deep(state.agent_id, state.v1_version_id, eval_run_id)
     job_id = job.get("job_id", "")
     if not job_id:
-        return f"Deep optimize did not return job_id: {job}"
+        return f"No job_id returned: {job}"
     final = c.wait_improvement_job(job_id, poll_seconds=30, max_seconds=1800)
     update_session(v2b_version_id=final.get("result_version_id", ""))
-    return (f"**DEEP optimize:** job `{job_id[:8]}` → status "
-            f"`{final.get('status')}`. Run `/asserten-eval v2b` next.")
+    return (f"**DEEP optimize:** job `{job_id[:8]}` → "
+            f"`{final.get('status')}`. Run `/asserten-eval v2b`.")
 
 
 def cmd_compare(args: dict) -> str:
@@ -176,6 +200,7 @@ _DISPATCH = {
     "ingest": cmd_ingest,
     "audit": cmd_audit,
     "select": cmd_select,
+    "prepare-eval": cmd_prepare_eval,
     "eval": cmd_eval,
     "optimize-light": cmd_optimize_light,
     "optimize-deep": cmd_optimize_deep,
