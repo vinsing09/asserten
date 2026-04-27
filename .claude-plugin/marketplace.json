@@ -1,0 +1,19 @@
+{
+  "name": "asserten",
+  "owner": {
+    "name": "vinsing09"
+  },
+  "metadata": {
+    "description": "Asserten plugin marketplace — drives an LLM agent through audit, patch select, eval, LIGHT/DEEP optimize, and a 4-way comparison.",
+    "version": "0.1.0",
+    "homepage": "https://github.com/vinsing09/asserten"
+  },
+  "plugins": [
+    {
+      "name": "asserten",
+      "source": "./",
+      "description": "Drive an agentops-backend agent through contract → tests → audit → patch select → eval → LIGHT/DEEP optimize → 4-way compare. All steps as /asserten-* slash commands.",
+      "version": "0.1.0"
+    }
+  ]
+}
