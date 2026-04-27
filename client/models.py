@@ -129,6 +129,8 @@ class SessionState:
     v2a_eval_pass_rate: float | None = None
     v2b_version_id: str = ""
     v2b_eval_pass_rate: float | None = None
+    v2b_attempts: int = 0
+    v2b_last_status: str = ""
     suggested_patches: list[dict] = field(default_factory=list)
     accepted_patch_ids: list[str] = field(default_factory=list)
     candidate_v1_ids: list[str] = field(default_factory=list)

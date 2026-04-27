@@ -184,9 +184,53 @@ def cmd_optimize_deep(args: dict) -> str:
     if not job_id:
         return f"No job_id returned: {job}"
     final = c.wait_improvement_job(job_id, poll_seconds=30, max_seconds=1800)
-    update_session(v2b_version_id=final.get("result_version_id", ""))
-    return (f"**DEEP optimize:** job `{job_id[:8]}` → "
-            f"`{final.get('status')}`. Run `/asserten-eval v2b`.")
+    status = final.get("status", "unknown")
+    attempt_n = state.v2b_attempts + 1
+
+    if status != "completed":
+        update_session(v2b_attempts=attempt_n, v2b_last_status=status)
+        return (f"**Deep optimisation attempt #{attempt_n}:** job `{job_id[:8]}` "
+                f"ended with status `{status}`. Try `/asserten-optimize-deep` "
+                f"again, or check backend logs.")
+
+    suggestions = final.get("suggestions") or []
+    if not suggestions:
+        update_session(v2b_attempts=attempt_n, v2b_last_status="no_valid_patch")
+        return (f"**Deep optimisation attempt #{attempt_n}:** couldn't produce "
+                f"a valid patch — every candidate was dropped at verify because "
+                f"it would have regressed an existing assertion. v2b unavailable "
+                f"for this run. You can `/asserten-optimize-deep` again to retry "
+                f"with a fresh sample (each run is non-deterministic).")
+
+    # Apply the surviving patches to create v2b.
+    fix_ids = [s.get("id") for s in suggestions if s.get("id")]
+    structured = [
+        {
+            "id": s.get("id"),
+            "target_slot": s.get("target_slot"),
+            "tool_filter": s.get("tool_filter", "all"),
+            "on_error_only": s.get("on_error_only", False),
+            "prompt_patch": s.get("prompt_patch", ""),
+        }
+        for s in suggestions
+    ]
+    try:
+        v2b_id = c.apply_improvements(
+            state.agent_id, state.v1_version_id,
+            accepted_fix_ids=fix_ids, eval_run_id=eval_run_id,
+            accepted_structured=structured,
+        )
+    except Exception as exc:
+        update_session(v2b_attempts=attempt_n, v2b_last_status="apply_failed")
+        return (f"**Deep optimisation attempt #{attempt_n}:** {len(suggestions)} "
+                f"patches survived verify but apply failed: "
+                f"`{type(exc).__name__}: {exc}`.")
+
+    update_session(v2b_version_id=v2b_id, v2b_attempts=attempt_n,
+                   v2b_last_status="ok")
+    return (f"**Deep optimisation attempt #{attempt_n}:** {len(suggestions)} "
+            f"patch(es) applied → v2b `{v2b_id[:8]}`. "
+            f"Run `/asserten-eval v2b`.")
 
 
 def cmd_compare(args: dict) -> str:
