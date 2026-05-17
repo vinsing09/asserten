@@ -233,6 +233,148 @@ def cmd_optimize_deep(args: dict) -> str:
             f"Run `/asserten-eval v2b`.")
 
 
+def _resolve_target_version(state: SessionState, target: str | None) -> tuple[str, str]:
+    """Map target alias ('v0' | 'v1' | 'v2a' | 'v2b') to (label, version_id).
+
+    Defaults to v1 since user-provided test cases most often anchor on v1.
+    Raises ValueError on unresolvable target.
+    """
+    tgt = (target or "v1").strip().lower()
+    mapping = {
+        "v0": state.v0_version_id,
+        "v1": state.v1_version_id,
+        "v2a": state.v2a_version_id,
+        "v2b": state.v2b_version_id,
+    }
+    if tgt not in mapping:
+        raise ValueError(f"unknown target {tgt!r}; expected v0|v1|v2a|v2b")
+    vid = mapping[tgt]
+    if not vid:
+        raise ValueError(f"no {tgt} in session — run prior steps first")
+    return tgt, vid
+
+
+def cmd_add_tests(args: dict) -> str:
+    """args: {file: <path-to-test-cases-json>} OR raw json body.
+
+    The test cases JSON may be a single object {test_cases: [...]} OR a bare
+    list of test cases. Default target version is v1 (most common anchor).
+    Pass target="v0"/"v2a"/"v2b" to attach to a different version.
+    """
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    # Load test cases — from file if given, else from inline JSON args.
+    cases: list[dict] = []
+    if "file" in args:
+        with open(args["file"]) as fh:
+            payload = json.load(fh)
+        cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
+    elif "test_cases" in args:
+        cases = args["test_cases"]
+    elif "_raw" in args:
+        return ("Pass either `{\"file\": \"path/to/tests.json\"}` or "
+                "`{\"test_cases\": [...]}`. Each case needs scenario, input_text, "
+                "tool_stubs, assertions, tags.")
+    else:
+        return "No test cases provided. Pass `file` or `test_cases`."
+
+    if not isinstance(cases, list) or not cases:
+        return "Test cases must be a non-empty list."
+
+    try:
+        _, vid = _resolve_target_version(state, args.get("target"))
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    result = c.add_user_test_cases(state.agent_id, vid, cases)
+    n_inserted = len(result.get("inserted", []))
+    n_errors = len(result.get("errors", []))
+    warnings = [w for entry in result.get("inserted", [])
+                for w in entry.get("warnings", [])]
+
+    lines = [f"**Added {n_inserted} test case(s) to {args.get('target','v1')}**"]
+    if n_errors:
+        lines.append(f"\n⚠ {n_errors} case(s) rejected:")
+        for e in result["errors"]:
+            lines.append(f"  - case #{e.get('index','?')} ({e.get('scenario','?')}): "
+                         f"{e.get('error','unknown')}")
+    if warnings:
+        lines.append(f"\n⚠ warnings (non-fatal):")
+        for w in warnings[:10]:
+            lines.append(f"  - {w}")
+    if n_inserted:
+        lines.append(f"\nIDs: " + ", ".join(
+            f"`{x['id'][:8]}`" for x in result['inserted']
+        ))
+        lines.append("\nNext: `/asserten-eval v1` to run including your cases.")
+    return "\n".join(lines)
+
+
+def cmd_skip_tests(args: dict) -> str:
+    """args: {test_case_ids: [...]} or raw comma-separated ids."""
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    ids = args.get("test_case_ids") or []
+    if not ids and "_raw" in args:
+        ids = [x.strip() for x in args["_raw"].split(",") if x.strip()]
+    if not ids:
+        return ("Pass `test_case_ids` (a list) or a comma-separated list of "
+                "test-case ids to skip.")
+
+    try:
+        _, vid = _resolve_target_version(state, args.get("target"))
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    result = c.skip_test_cases(state.agent_id, vid, ids)
+    skipped = result.get("skipped", [])
+    nf = result.get("not_found", [])
+    lines = [f"**Skipped {len(skipped)} case(s)**"]
+    if skipped:
+        lines.append("  " + ", ".join(f"`{x[:8]}`" for x in skipped))
+    if nf:
+        lines.append(f"\n⚠ {len(nf)} id(s) not found on this version:")
+        lines.append("  " + ", ".join(f"`{x[:8]}`" for x in nf))
+    return "\n".join(lines)
+
+
+def cmd_unskip_tests(args: dict) -> str:
+    """args: {test_case_ids: [...]} or raw comma-separated ids."""
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    ids = args.get("test_case_ids") or []
+    if not ids and "_raw" in args:
+        ids = [x.strip() for x in args["_raw"].split(",") if x.strip()]
+    if not ids:
+        return ("Pass `test_case_ids` or a comma-separated list of ids to "
+                "un-skip.")
+
+    try:
+        _, vid = _resolve_target_version(state, args.get("target"))
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    result = c.unskip_test_cases(state.agent_id, vid, ids)
+    unskipped = result.get("unskipped", [])
+    nf = result.get("not_found", [])
+    lines = [f"**Un-skipped {len(unskipped)} case(s)**"]
+    if unskipped:
+        lines.append("  " + ", ".join(f"`{x[:8]}`" for x in unskipped))
+    if nf:
+        lines.append(f"\n⚠ {len(nf)} id(s) not found:")
+        lines.append("  " + ", ".join(f"`{x[:8]}`" for x in nf))
+    return "\n".join(lines)
+
+
 def cmd_compare(args: dict) -> str:
     state = load_session()
     return render_compare_table(state)
@@ -246,6 +388,9 @@ _DISPATCH = {
     "select": cmd_select,
     "prepare-eval": cmd_prepare_eval,
     "eval": cmd_eval,
+    "add-tests": cmd_add_tests,
+    "skip-tests": cmd_skip_tests,
+    "unskip-tests": cmd_unskip_tests,
     "optimize-light": cmd_optimize_light,
     "optimize-deep": cmd_optimize_deep,
     "compare": cmd_compare,

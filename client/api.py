@@ -127,6 +127,62 @@ class AssertenClient:
             timeout=600,
         )
 
+    # ─── Test cases (user-provided / skip) ───────────────────────────────
+    # Backend support added 2026-05-17 (agentops-backend commit af1d47f).
+    # Lets customers bring their own test cases alongside auto-generated ones,
+    # and mark generated cases as skipped (excluded from eval runs without
+    # deletion). Per-case error isolation: one bad case in a bulk upload does
+    # not block the others — bad cases come back in `errors[]`.
+
+    def add_user_test_cases(
+        self, agent_id: str, version_id: str, test_cases: list[dict],
+    ) -> dict:
+        """POST /test-cases/user-provided → {inserted: [...], errors: [...]}.
+
+        Each test case must match the standard shape:
+          {scenario, input_text, tool_stubs, assertions, obligation_ids,
+           tags, replaces_generated_id?}
+
+        Server validates: assertion types from the allowed set, tags from the
+        standard set, tool_stubs keys match the agent's tool schema, and
+        replaces_generated_id (if present) points at an existing generated case.
+        """
+        return self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{version_id}/test-cases/user-provided",
+            json_body={"test_cases": test_cases},
+            timeout=60,
+        )
+
+    def skip_test_cases(
+        self, agent_id: str, version_id: str, test_case_ids: list[str],
+    ) -> dict:
+        """POST /test-cases/skip → {skipped: [...], not_found: [...]}.
+
+        Marks the given test cases as skipped=1. They stay in the DB and are
+        excluded from eval runs. Idempotent.
+        """
+        return self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{version_id}/test-cases/skip",
+            json_body={"test_case_ids": test_case_ids},
+            timeout=30,
+        )
+
+    def unskip_test_cases(
+        self, agent_id: str, version_id: str, test_case_ids: list[str],
+    ) -> dict:
+        """POST /test-cases/unskip → {unskipped: [...], not_found: [...]}.
+
+        Inverse of skip — re-includes the cases in eval runs.
+        """
+        return self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{version_id}/test-cases/unskip",
+            json_body={"test_case_ids": test_case_ids},
+            timeout=30,
+        )
+
     # ─── Eval ─────────────────────────────────────────────────────────────
 
     def run_eval(self, agent_id: str, version_id: str,

@@ -30,6 +30,19 @@ Or run the whole flow with `/asserten-run`.
 
 Helpers: `/asserten-status` (current session), `/asserten-reset` (clear).
 
+## Bring your own test cases (optional, any time after step 3)
+
+| command | what it does |
+|---|---|
+| `/asserten-add-tests path/to/tests.json` | add customer-supplied test cases alongside generated ones |
+| `/asserten-skip-tests id_1, id_2` | mark generated cases as skipped (excluded from eval) |
+| `/asserten-unskip-tests id_1` | re-include previously-skipped cases |
+
+These cases run together with the generated set and drive patches just like
+generated cases. Useful when you already know the failure modes you care
+about — supply them directly instead of relying on the generator to find
+them.
+
 ## Setup
 
 Before any command, set:

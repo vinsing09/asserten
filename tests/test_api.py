@@ -79,6 +79,49 @@ def test_run_eval_propagates_test_case_source(client):
 
 
 @respx.mock
+def test_add_user_test_cases_sends_payload_and_returns_result(client):
+    route = respx.post(
+        f"{BACKEND}/agents/a/versions/v/test-cases/user-provided"
+    ).mock(return_value=httpx.Response(200, json={
+        "inserted": [{"id": "tc_1", "scenario": "ref"}],
+        "errors": [],
+    }))
+    cases = [{"scenario": "ref", "input_text": "foo", "tool_stubs": {},
+              "assertions": [], "obligation_ids": [], "tags": ["happy_path"]}]
+    out = client.add_user_test_cases("a", "v", cases)
+    assert out["inserted"][0]["id"] == "tc_1"
+    body = route.calls.last.request.read().decode()
+    assert '"test_cases":' in body
+    assert '"scenario": "ref"' in body
+    assert route.calls.last.request.headers["X-Asserten-Key"] == "secret"
+
+
+@respx.mock
+def test_skip_test_cases_sends_ids_and_returns_split(client):
+    respx.post(f"{BACKEND}/agents/a/versions/v/test-cases/skip").mock(
+        return_value=httpx.Response(200, json={
+            "skipped": ["tc_1"], "not_found": ["tc_nope"],
+        })
+    )
+    out = client.skip_test_cases("a", "v", ["tc_1", "tc_nope"])
+    assert out["skipped"] == ["tc_1"]
+    assert out["not_found"] == ["tc_nope"]
+
+
+@respx.mock
+def test_unskip_test_cases_inverse_of_skip(client):
+    route = respx.post(f"{BACKEND}/agents/a/versions/v/test-cases/unskip").mock(
+        return_value=httpx.Response(200, json={
+            "unskipped": ["tc_1"], "not_found": [],
+        })
+    )
+    out = client.unskip_test_cases("a", "v", ["tc_1"])
+    assert out["unskipped"] == ["tc_1"]
+    body = route.calls.last.request.read().decode()
+    assert '"test_case_ids": ["tc_1"]' in body
+
+
+@respx.mock
 def test_optimize_light_parses_result(client):
     respx.post(f"{BACKEND}/agents/a/optimize/light").mock(
         return_value=httpx.Response(200, json={
