@@ -43,6 +43,17 @@ generated cases. Useful when you already know the failure modes you care
 about — supply them directly instead of relying on the generator to find
 them.
 
+## Transparency / "why did this version land where it did?"
+
+| command | what it does |
+|---|---|
+| `/asserten-show-contract` | show the contract with mandate-coverage breakdown (which categories the LLM produced directly vs which were auto-injected as placeholders) |
+
+Use after `/asserten-prepare-eval` or `/asserten-select`. If you see
+auto-injected obligations, your system prompt under-covered that mandate
+category — refine the prompt and regenerate for cleaner LLM-natural
+coverage.
+
 ## Setup
 
 Before any command, set:

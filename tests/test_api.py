@@ -158,6 +158,40 @@ def test_skip_test_cases_5xx_raises(client):
 
 
 @respx.mock
+def test_get_contract_returns_obligations_and_no_auth_header(client):
+    """GET endpoints don't gate on X-Asserten-Key (middleware lets reads through)."""
+    route = respx.get(f"{BACKEND}/agents/a/versions/v/contract").mock(
+        return_value=httpx.Response(200, json={
+            "id": "c1",
+            "obligations": [
+                {"id": "obl_1", "failure_category": "GOAL_COMPLETION",
+                 "text": "by end of conversation"},
+                {"id": "obl_2", "failure_category": "REASONING_QUALITY",
+                 "text": "apply policy", "auto_injected": True,
+                 "source": "auto_injected"},
+            ],
+            "forbidden_behaviors": [],
+            "tool_sequences": [],
+        })
+    )
+    out = client.get_contract("a", "v")
+    assert out["obligations"][0]["failure_category"] == "GOAL_COMPLETION"
+    assert out["obligations"][1].get("auto_injected") is True
+    # GET doesn't send X-Asserten-Key (middleware doesn't require it on reads)
+    assert "X-Asserten-Key" not in route.calls.last.request.headers
+
+
+@respx.mock
+def test_get_contract_404_raises(client):
+    respx.get(f"{BACKEND}/agents/a/versions/v/contract").mock(
+        return_value=httpx.Response(404, json={"detail": "Contract not found"})
+    )
+    with pytest.raises(AssertenError) as exc:
+        client.get_contract("a", "v")
+    assert exc.value.status == 404
+
+
+@respx.mock
 def test_optimize_light_parses_result(client):
     respx.post(f"{BACKEND}/agents/a/optimize/light").mock(
         return_value=httpx.Response(200, json={

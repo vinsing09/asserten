@@ -120,6 +120,20 @@ class AssertenClient:
             timeout=300,
         )
 
+    def get_contract(self, agent_id: str, version_id: str) -> dict:
+        """GET /contract — returns the stored contract with obligations,
+        tool_sequences, forbidden_behaviors, latency_budgets. Auto-injected
+        obligations from the backend's mandate-enforcement step carry
+        `auto_injected: true` and `source: "auto_injected"` — used by
+        /asserten-show-contract to surface methodical-rigor transparency
+        (which categories the LLM produced naturally vs which we backfilled
+        as placeholders).
+        """
+        return self._request(
+            "GET",
+            f"/agents/{agent_id}/versions/{version_id}/contract",
+        )
+
     def generate_test_cases(self, agent_id: str, version_id: str) -> dict:
         return self._request(
             "POST",

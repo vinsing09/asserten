@@ -406,6 +406,104 @@ def cmd_unskip_tests(args: dict) -> str:
     return "\n".join(lines)
 
 
+def cmd_show_contract(args: dict) -> str:
+    """Show the customer's contract with auto-injection transparency.
+
+    Surfaces:
+      - Total obligations / forbidden_behaviors / tool_sequences counts.
+      - Per-category coverage (and which were auto-injected vs LLM-produced).
+      - Specifically calls out the four mandate categories
+        (GOAL_COMPLETION, REASONING_QUALITY, ESCALATION, HALLUCINATION_GUARD)
+        and whether each was met by the LLM or backfilled as a placeholder.
+
+    Default target is v1 (the current working version). Pass target=v0/v2a/v2b
+    to inspect a different version.
+    """
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    target_alias = args.get("target") or args.get("_raw") or "v1"
+    target_alias = target_alias.strip().lower() if isinstance(target_alias, str) else "v1"
+    try:
+        _, vid = _resolve_target_version(state, target_alias)
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    try:
+        contract = c.get_contract(state.agent_id, vid)
+    except AssertenError as exc:
+        if exc.status == 404:
+            return f"No contract found for {target_alias}. Run `/asserten-prepare-eval` to generate one."
+        raise
+
+    obls = contract.get("obligations") or []
+    forb = contract.get("forbidden_behaviors") or []
+    tool_seqs = contract.get("tool_sequences") or []
+
+    # Per-category obligation count + auto-injected count
+    from collections import Counter
+    obl_total = Counter(o.get("failure_category", "?") for o in obls)
+    obl_injected = Counter(
+        o.get("failure_category", "?") for o in obls if o.get("auto_injected")
+    )
+    forb_total = Counter(f.get("failure_category", "?") for f in forb)
+
+    lines = [f"**Contract for {target_alias}** (`{vid[:8]}`)"]
+    lines.append("")
+    lines.append(f"- {len(obls)} obligation(s)")
+    lines.append(f"- {len(forb)} forbidden behavior(s)")
+    lines.append(f"- {len(tool_seqs)} tool sequence(s)")
+    lines.append("")
+
+    # Mandate-coverage table — the four categories we enforce by code
+    mandates = [
+        ("GOAL_COMPLETION",     "≥2"),
+        ("REASONING_QUALITY",   "≥2"),
+        ("ESCALATION",          "≥1"),
+        ("HALLUCINATION_GUARD", "≥1 (obligations OR forbidden_behaviors)"),
+    ]
+    lines.append("**Mandate coverage:**")
+    lines.append("")
+    lines.append("| Category | Min | Found | Auto-injected | OK? |")
+    lines.append("|---|---|---|---|---|")
+    for cat, target in mandates:
+        if cat == "HALLUCINATION_GUARD":
+            found = obl_total.get(cat, 0) + forb_total.get(cat, 0)
+        else:
+            found = obl_total.get(cat, 0)
+        injected = obl_injected.get(cat, 0)
+        # Strip "≥" + digits from `target` to get N
+        try:
+            min_n = int("".join(ch for ch in target if ch.isdigit())[:1])
+        except ValueError:
+            min_n = 1
+        ok = "✓" if found >= min_n else "✗"
+        inj_str = f"{injected}" if injected else "—"
+        lines.append(f"| {cat} | {target} | {found} | {inj_str} | {ok} |")
+    lines.append("")
+
+    n_injected_total = sum(obl_injected.values())
+    if n_injected_total > 0:
+        lines.append(f"_{n_injected_total} obligation(s) were auto-injected as "
+                     "placeholders because the LLM didn't produce enough coverage "
+                     "in those categories. These are honest fallbacks, not LLM "
+                     "output — you may want to review and refine them in your "
+                     "system prompt before evaluating._")
+        lines.append("")
+        lines.append("Auto-injected entries:")
+        for o in obls:
+            if o.get("auto_injected"):
+                lines.append(f"- `{o.get('id','?')}` [{o.get('failure_category','?')}]: "
+                             f"{(o.get('text','') or '')[:140]}")
+    else:
+        lines.append("_All obligations were produced by the LLM directly — no "
+                     "auto-injected placeholders this run._")
+
+    return "\n".join(lines)
+
+
 def cmd_compare(args: dict) -> str:
     state = load_session()
     return render_compare_table(state)
@@ -422,6 +520,7 @@ _DISPATCH = {
     "add-tests": cmd_add_tests,
     "skip-tests": cmd_skip_tests,
     "unskip-tests": cmd_unskip_tests,
+    "show-contract": cmd_show_contract,
     "optimize-light": cmd_optimize_light,
     "optimize-deep": cmd_optimize_deep,
     "compare": cmd_compare,
