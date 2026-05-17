@@ -109,4 +109,20 @@ def render_session_summary(state: SessionState) -> str:
                      f"pr={state.v2b_eval_pass_rate}")
     if state.last_error:
         parts.append(f"⚠ last error: {state.last_error[:200]}")
+    if state.last_test_case_op:
+        op = state.last_test_case_op
+        op_name = op.get("op", "?")
+        n_in = len(op.get("inserted") or [])
+        n_sk = len(op.get("skipped") or [])
+        n_un = len(op.get("unskipped") or [])
+        n_err = len(op.get("errors") or [])
+        n_nf = len(op.get("not_found") or [])
+        summary_bits = []
+        if n_in: summary_bits.append(f"inserted={n_in}")
+        if n_sk: summary_bits.append(f"skipped={n_sk}")
+        if n_un: summary_bits.append(f"unskipped={n_un}")
+        if n_err: summary_bits.append(f"errors={n_err}")
+        if n_nf: summary_bits.append(f"not_found={n_nf}")
+        parts.append(f"last test-case op: `{op_name}` on {op.get('target','?')} "
+                     f"at {op.get('at','?')[:19]} — " + ", ".join(summary_bits))
     return "\n".join(parts)

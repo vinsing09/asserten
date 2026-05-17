@@ -135,6 +135,14 @@ class SessionState:
     accepted_patch_ids: list[str] = field(default_factory=list)
     candidate_v1_ids: list[str] = field(default_factory=list)
     last_error: str = ""
+    # Forensics record of the most recent /asserten-add-tests, /asserten-skip-tests,
+    # or /asserten-unskip-tests invocation. Inspect via /asserten-status when an
+    # earlier add/skip didn't behave as the customer expected. Shape:
+    #   {op, target, at, inserted: [...], errors: [...], skipped: [...],
+    #    not_found: [...], unskipped: [...]}
+    # — keys present depend on which op ran. `from_dict` ignores unknown keys so
+    # forwards/backwards-compatible across plugin upgrades.
+    last_test_case_op: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict: return asdict(self)
 

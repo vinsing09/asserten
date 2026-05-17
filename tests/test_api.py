@@ -122,6 +122,42 @@ def test_unskip_test_cases_inverse_of_skip(client):
 
 
 @respx.mock
+def test_add_user_test_cases_4xx_raises_asserten_error(client):
+    """422 Unprocessable Entity → AssertenError carries status + body for forensics."""
+    respx.post(f"{BACKEND}/agents/a/versions/v/test-cases/user-provided").mock(
+        return_value=httpx.Response(422, json={"detail": [
+            {"loc": ["body", "test_cases", 0, "tags"], "msg": "value error"}
+        ]})
+    )
+    with pytest.raises(AssertenError) as exc:
+        client.add_user_test_cases("a", "v", [{"scenario": "x", "tags": ["fake"]}])
+    assert exc.value.status == 422
+    assert "value error" in exc.value.body
+
+
+@respx.mock
+def test_add_user_test_cases_404_propagates(client):
+    """Unknown agent → 404 from backend → AssertenError preserves URL for debug."""
+    respx.post(f"{BACKEND}/agents/nope/versions/v/test-cases/user-provided").mock(
+        return_value=httpx.Response(404, json={"detail": "Agent not found"})
+    )
+    with pytest.raises(AssertenError) as exc:
+        client.add_user_test_cases("nope", "v", [{"scenario": "x"}])
+    assert exc.value.status == 404
+    assert "/agents/nope/" in exc.value.url
+
+
+@respx.mock
+def test_skip_test_cases_5xx_raises(client):
+    respx.post(f"{BACKEND}/agents/a/versions/v/test-cases/skip").mock(
+        return_value=httpx.Response(503, text="upstream down")
+    )
+    with pytest.raises(AssertenError) as exc:
+        client.skip_test_cases("a", "v", ["tc_1"])
+    assert exc.value.status == 503
+
+
+@respx.mock
 def test_optimize_light_parses_result(client):
     respx.post(f"{BACKEND}/agents/a/optimize/light").mock(
         return_value=httpx.Response(200, json={

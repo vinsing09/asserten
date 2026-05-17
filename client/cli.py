@@ -254,6 +254,22 @@ def _resolve_target_version(state: SessionState, target: str | None) -> tuple[st
     return tgt, vid
 
 
+def _record_test_case_op(op: str, target: str, result: dict) -> None:
+    """Persist the full result blob of an add/skip/unskip op to session state
+    for later inspection via `/asserten-status` when something behaved
+    unexpectedly. Captures the WHOLE response (inserted/errors/skipped/
+    not_found/unskipped), not just summary counts — forensics needs the rows.
+    """
+    from datetime import datetime, timezone
+    record = {
+        "op": op,
+        "target": target,
+        "at": datetime.now(timezone.utc).isoformat(),
+        **result,
+    }
+    update_session(last_test_case_op=record)
+
+
 def cmd_add_tests(args: dict) -> str:
     """args: {file: <path-to-test-cases-json>} OR raw json body.
 
@@ -268,8 +284,13 @@ def cmd_add_tests(args: dict) -> str:
     # Load test cases — from file if given, else from inline JSON args.
     cases: list[dict] = []
     if "file" in args:
-        with open(args["file"]) as fh:
-            payload = json.load(fh)
+        try:
+            with open(args["file"]) as fh:
+                payload = json.load(fh)
+        except FileNotFoundError:
+            return f"⚠ File not found: {args['file']}"
+        except json.JSONDecodeError as exc:
+            return f"⚠ Invalid JSON in {args['file']}: {exc}"
         cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
     elif "test_cases" in args:
         cases = args["test_cases"]
@@ -283,19 +304,22 @@ def cmd_add_tests(args: dict) -> str:
     if not isinstance(cases, list) or not cases:
         return "Test cases must be a non-empty list."
 
+    target_alias = args.get("target") or "v1"
     try:
-        _, vid = _resolve_target_version(state, args.get("target"))
+        _, vid = _resolve_target_version(state, target_alias)
     except ValueError as exc:
         return f"⚠ {exc}"
 
     c = _client(state)
     result = c.add_user_test_cases(state.agent_id, vid, cases)
+    _record_test_case_op("add", target_alias, result)
+
     n_inserted = len(result.get("inserted", []))
     n_errors = len(result.get("errors", []))
     warnings = [w for entry in result.get("inserted", [])
                 for w in entry.get("warnings", [])]
 
-    lines = [f"**Added {n_inserted} test case(s) to {args.get('target','v1')}**"]
+    lines = [f"**Added {n_inserted} test case(s) to {target_alias}**"]
     if n_errors:
         lines.append(f"\n⚠ {n_errors} case(s) rejected:")
         for e in result["errors"]:
@@ -310,6 +334,7 @@ def cmd_add_tests(args: dict) -> str:
             f"`{x['id'][:8]}`" for x in result['inserted']
         ))
         lines.append("\nNext: `/asserten-eval v1` to run including your cases.")
+    lines.append("\n_Full per-case result saved in session for forensics — see `/asserten-status`._")
     return "\n".join(lines)
 
 
@@ -326,13 +351,16 @@ def cmd_skip_tests(args: dict) -> str:
         return ("Pass `test_case_ids` (a list) or a comma-separated list of "
                 "test-case ids to skip.")
 
+    target_alias = args.get("target") or "v1"
     try:
-        _, vid = _resolve_target_version(state, args.get("target"))
+        _, vid = _resolve_target_version(state, target_alias)
     except ValueError as exc:
         return f"⚠ {exc}"
 
     c = _client(state)
     result = c.skip_test_cases(state.agent_id, vid, ids)
+    _record_test_case_op("skip", target_alias, result)
+
     skipped = result.get("skipped", [])
     nf = result.get("not_found", [])
     lines = [f"**Skipped {len(skipped)} case(s)**"]
@@ -357,13 +385,16 @@ def cmd_unskip_tests(args: dict) -> str:
         return ("Pass `test_case_ids` or a comma-separated list of ids to "
                 "un-skip.")
 
+    target_alias = args.get("target") or "v1"
     try:
-        _, vid = _resolve_target_version(state, args.get("target"))
+        _, vid = _resolve_target_version(state, target_alias)
     except ValueError as exc:
         return f"⚠ {exc}"
 
     c = _client(state)
     result = c.unskip_test_cases(state.agent_id, vid, ids)
+    _record_test_case_op("unskip", target_alias, result)
+
     unskipped = result.get("unskipped", [])
     nf = result.get("not_found", [])
     lines = [f"**Un-skipped {len(unskipped)} case(s)**"]
