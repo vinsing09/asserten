@@ -34,7 +34,8 @@ Helpers: `/asserten-status` (current session), `/asserten-reset` (clear).
 
 | command | what it does |
 |---|---|
-| `/asserten-add-tests path/to/tests.json` | add customer-supplied test cases alongside generated ones |
+| **`/asserten-byoe`** | **plain-English entry: type `input` + what agent should say/call/not do; we fill in the schema** |
+| `/asserten-add-tests path/to/tests.json` | full-schema JSON upload (for technical users) |
 | `/asserten-skip-tests id_1, id_2` | mark generated cases as skipped (excluded from eval) |
 | `/asserten-unskip-tests id_1` | re-include previously-skipped cases |
 
@@ -42,6 +43,11 @@ These cases run together with the generated set and drive patches just like
 generated cases. Useful when you already know the failure modes you care
 about — supply them directly instead of relying on the generator to find
 them.
+
+**Prefer `/asserten-byoe` if you're not a developer.** It walks you through
+prompts ("what does the user say?" → "what should the agent reply with?")
+and handles the schema for you. Use `/asserten-add-tests` only if you've
+already written the full structured JSON.
 
 ## Transparency / "why did this version land where it did?"
 

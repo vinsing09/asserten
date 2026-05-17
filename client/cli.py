@@ -406,6 +406,79 @@ def cmd_unskip_tests(args: dict) -> str:
     return "\n".join(lines)
 
 
+def cmd_byoe(args: dict) -> str:
+    """args: {file: <path>} OR {test_cases: [{...}]} OR raw json body.
+
+    BYOE — customer-friendly test-case entry. Accepts the simple shape:
+      {input, agent_should_say[], agent_should_call[], agent_should_not[]}
+
+    The interactive walk-through (one field at a time) lives in the slash
+    command markdown (commands/asserten-byoe.md) which gathers the fields
+    from the user and feeds them as JSON to this CLI. The CLI itself only
+    handles the file-or-JSON input shape.
+    """
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    cases: list[dict] = []
+    if "file" in args:
+        try:
+            with open(args["file"]) as fh:
+                payload = json.load(fh)
+        except FileNotFoundError:
+            return f"⚠ File not found: {args['file']}"
+        except json.JSONDecodeError as exc:
+            return f"⚠ Invalid JSON in {args['file']}: {exc}"
+        cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
+    elif "test_cases" in args:
+        cases = args["test_cases"]
+    elif "_raw" in args:
+        return ("Pass `{\"file\": \"path/to/byoe.json\"}` or "
+                "`{\"test_cases\": [{input, agent_should_say, agent_should_call, "
+                "agent_should_not}, ...]}`.")
+    else:
+        return "No test cases provided. Pass `file` or `test_cases`."
+
+    if not isinstance(cases, list) or not cases:
+        return "Test cases must be a non-empty list."
+
+    target_alias = args.get("target") or "v1"
+    try:
+        _, vid = _resolve_target_version(state, target_alias)
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    result = c.add_byoe_test_cases(state.agent_id, vid, cases)
+    _record_test_case_op("byoe", target_alias, result)
+
+    n_inserted = len(result.get("inserted", []))
+    n_errors = len(result.get("errors", []))
+    fallbacks = [e for e in result.get("inserted", []) if e.get("fallback_reason")]
+
+    lines = [f"**Added {n_inserted} BYOE test case(s) to {target_alias}**"]
+    if n_errors:
+        lines.append(f"\n⚠ {n_errors} case(s) rejected:")
+        for e in result["errors"]:
+            lines.append(f"  - case #{e.get('index','?')} ({e.get('input','?')[:60]!r}): "
+                         f"{e.get('error','unknown')}")
+    if fallbacks:
+        lines.append(f"\n⚠ {len(fallbacks)} case(s) used deterministic fallback "
+                     "(LLM enrichment failed):")
+        for f in fallbacks:
+            lines.append(f"  - `{f['id'][:8]}`: {f.get('fallback_reason','unknown')[:120]}")
+    if n_inserted:
+        lines.append(f"\nScenarios:")
+        for entry in result["inserted"][:10]:
+            lines.append(f"  - `{entry['id'][:8]}`: {entry['scenario'][:120]}")
+        if n_inserted > 10:
+            lines.append(f"  ...and {n_inserted - 10} more")
+        lines.append("\nNext: `/asserten-eval v1` to run including your BYOE cases.")
+    lines.append("\n_Full per-case result saved in session for forensics — see `/asserten-status`._")
+    return "\n".join(lines)
+
+
 def cmd_show_contract(args: dict) -> str:
     """Show the customer's contract with auto-injection transparency.
 
@@ -520,6 +593,7 @@ _DISPATCH = {
     "add-tests": cmd_add_tests,
     "skip-tests": cmd_skip_tests,
     "unskip-tests": cmd_unskip_tests,
+    "byoe": cmd_byoe,
     "show-contract": cmd_show_contract,
     "optimize-light": cmd_optimize_light,
     "optimize-deep": cmd_optimize_deep,

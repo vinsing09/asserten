@@ -192,6 +192,40 @@ def test_get_contract_404_raises(client):
 
 
 @respx.mock
+def test_add_byoe_test_cases_sends_simple_shape(client):
+    route = respx.post(f"{BACKEND}/agents/a/versions/v/test-cases/byoe").mock(
+        return_value=httpx.Response(200, json={
+            "inserted": [{"id": "tc_1", "scenario": "refund flow"}],
+            "errors": [],
+        })
+    )
+    simple = [{
+        "input": "I want a refund",
+        "agent_should_say": ["order ID"],
+        "agent_should_call": ["lookup_order"],
+        "agent_should_not": ["approve without verifying"],
+    }]
+    out = client.add_byoe_test_cases("a", "v", simple)
+    assert out["inserted"][0]["scenario"] == "refund flow"
+    body = route.calls.last.request.read().decode()
+    assert '"agent_should_say":' in body
+    assert '"agent_should_call":' in body
+    assert '"agent_should_not":' in body
+    # Auth header present on mutating request
+    assert route.calls.last.request.headers["X-Asserten-Key"] == "secret"
+
+
+@respx.mock
+def test_add_byoe_test_cases_4xx_raises(client):
+    respx.post(f"{BACKEND}/agents/a/versions/v/test-cases/byoe").mock(
+        return_value=httpx.Response(422, json={"detail": "validation error"})
+    )
+    with pytest.raises(AssertenError) as exc:
+        client.add_byoe_test_cases("a", "v", [{"input": "x"}])
+    assert exc.value.status == 422
+
+
+@respx.mock
 def test_optimize_light_parses_result(client):
     respx.post(f"{BACKEND}/agents/a/optimize/light").mock(
         return_value=httpx.Response(200, json={

@@ -197,6 +197,27 @@ class AssertenClient:
             timeout=30,
         )
 
+    def add_byoe_test_cases(
+        self, agent_id: str, version_id: str, simple_cases: list[dict],
+    ) -> dict:
+        """POST /test-cases/byoe → {inserted: [...], errors: [...]}.
+
+        Customer-friendly entry point: each `simple_case` has the shape
+          {input, agent_should_say[], agent_should_call[], agent_should_not[]}
+
+        Server enriches via LLM and inserts as user-provided test cases.
+        Returns same response shape as /test-cases/user-provided. Per-case
+        error isolation — bad cases come back in errors[]; good cases insert.
+
+        Cost: ~$0.001 per case (server-side LLM enrichment).
+        """
+        return self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{version_id}/test-cases/byoe",
+            json_body={"test_cases": simple_cases},
+            timeout=120,  # LLM enrichment per case; allow headroom on bulk
+        )
+
     # ─── Eval ─────────────────────────────────────────────────────────────
 
     def run_eval(self, agent_id: str, version_id: str,
