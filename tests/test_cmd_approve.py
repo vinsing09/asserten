@@ -89,13 +89,16 @@ def test_approve_target_not_in_session(tmp_path, monkeypatch):
 
 
 def test_approve_success_calls_backend_and_records_op(session_with_v1, monkeypatch):
+    # Real backend contract: `approved` is the full guaranteed set after the
+    # call; `already_approved` ⊆ approved. Two fresh approvals → both in
+    # `approved`, none in `already_approved`.
     stub = _StubClient(approve_returns={
         "approved": ["tc_1", "tc_2"], "not_found": [], "already_approved": []})
     _patch_client(monkeypatch, stub)
 
     out = cmd_approve({"test_case_ids": ["tc_1", "tc_2"]})
 
-    assert "**Approved 2 case(s)**" in out and "on v1" in out
+    assert "**Approved 2 new case(s)**" in out and "on v1" in out
     assert "no-regression promise" in out  # follow-up nudge present
     # Backend got the right args, routed to v1
     assert len(stub.approve_calls) == 1
@@ -110,12 +113,16 @@ def test_approve_success_calls_backend_and_records_op(session_with_v1, monkeypat
 
 
 def test_approve_already_approved_is_noop_note(session_with_v1, monkeypatch):
+    # Real backend puts an already-approved id in BOTH lists (approved is the
+    # full guaranteed set; already_approved is the no-op subset). Newly-flipped
+    # = len(approved) - len(already_approved) = 0.
     stub = _StubClient(approve_returns={
-        "approved": [], "not_found": [], "already_approved": ["tc_1"]})
+        "approved": ["tc_1"], "not_found": [], "already_approved": ["tc_1"]})
     _patch_client(monkeypatch, stub)
     out = cmd_approve({"test_case_ids": ["tc_1"]})
-    assert "Approved 0 case(s)" in out
-    assert "1 already approved" in out
+    assert "Approved 0 new case(s)" in out
+    assert "1 now in the guaranteed set" in out
+    assert "1 were already approved" in out
 
 
 def test_approve_not_found_surfaced(session_with_v1, monkeypatch):
@@ -123,7 +130,7 @@ def test_approve_not_found_surfaced(session_with_v1, monkeypatch):
         "approved": ["tc_1"], "not_found": ["tc_nope"], "already_approved": []})
     _patch_client(monkeypatch, stub)
     out = cmd_approve({"test_case_ids": ["tc_1", "tc_nope"]})
-    assert "Approved 1 case(s)" in out
+    assert "Approved 1 new case(s)" in out
     assert "Not found at this version: tc_nope" in out
 
 
@@ -166,8 +173,9 @@ def test_unapprove_success_records_op(session_with_v1, monkeypatch):
 
 
 def test_unapprove_already_unapproved_is_noop_note(session_with_v1, monkeypatch):
+    # Mirror of approve: already-unapproved id appears in BOTH lists.
     stub = _StubClient(unapprove_returns={
-        "unapproved": [], "not_found": [], "already_unapproved": ["tc_1"]})
+        "unapproved": ["tc_1"], "not_found": [], "already_unapproved": ["tc_1"]})
     _patch_client(monkeypatch, stub)
     out = cmd_unapprove({"test_case_ids": ["tc_1"]})
     assert "Unapproved 0 case(s)" in out

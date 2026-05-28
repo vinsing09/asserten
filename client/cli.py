@@ -609,12 +609,19 @@ def cmd_approve(args: dict) -> str:
     result = c.approve_test_cases(state.agent_id, vid, ids)
     _record_test_case_op("approve", target_alias, result)
 
+    # Backend returns `approved` = the full guaranteed set after this call;
+    # `already_approved` (⊆ approved) is the no-op subset. Newly-flipped is
+    # the difference — report that so the count isn't double-counted.
     approved = result.get("approved", [])
     nf = result.get("not_found", [])
     already = result.get("already_approved", [])
-    lines = [f"**Approved {len(approved)} case(s)** on {target_alias}"]
+    newly = len(approved) - len(already)
+    head = f"**Approved {newly} new case(s)** on {target_alias}"
     if already:
-        lines.append(f"_({len(already)} already approved — no-op)_")
+        head += f" — {len(approved)} now in the guaranteed set"
+    lines = [head]
+    if already:
+        lines.append(f"_({len(already)} were already approved — no-op)_")
     if nf:
         lines.append("")
         lines.append(f"⚠ Not found at this version: {', '.join(nf)}")
@@ -647,10 +654,16 @@ def cmd_unapprove(args: dict) -> str:
     result = c.unapprove_test_cases(state.agent_id, vid, ids)
     _record_test_case_op("unapprove", target_alias, result)
 
+    # Mirror of approve: `unapproved` is the full set now outside the
+    # guaranteed set; `already_unapproved` (⊆ unapproved) is the no-op subset.
     unapproved = result.get("unapproved", [])
     nf = result.get("not_found", [])
     already = result.get("already_unapproved", [])
-    lines = [f"**Unapproved {len(unapproved)} case(s)** on {target_alias}"]
+    newly = len(unapproved) - len(already)
+    head = f"**Unapproved {newly} case(s)** on {target_alias}"
+    if already:
+        head += f" — {len(unapproved)} now outside the guaranteed set"
+    lines = [head]
     if already:
         lines.append(f"_({len(already)} were already unapproved — no-op)_")
     if nf:
