@@ -12,7 +12,8 @@ import traceback
 from client.api import AssertenClient, AssertenError
 from client.format import (
     parse_patch_selection, render_audit_patches, render_compare_table,
-    render_eval_summary, render_optimize_result, render_session_summary,
+    render_eval_summary, render_gate_result, render_optimize_result,
+    render_scenarios_table, render_session_summary,
 )
 from client.models import Patch, SessionState
 from client.session import load_session, reset_session, update_session
@@ -582,6 +583,124 @@ def cmd_compare(args: dict) -> str:
     return render_compare_table(state)
 
 
+# ── 2026-05-29 scenarios + approve + deploy-gate ────────────────────────
+
+
+def cmd_approve(args: dict) -> str:
+    """args: {test_case_ids: [...], target?: v0|v1|v2a|v2b} or raw csv."""
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    ids = args.get("test_case_ids") or []
+    if not ids and "_raw" in args:
+        ids = [x.strip() for x in args["_raw"].split(",") if x.strip()]
+    if not ids:
+        return ("Pass `test_case_ids` (a list) or a comma-separated list of "
+                "test-case ids to approve.")
+
+    target_alias = args.get("target") or "v1"
+    try:
+        _, vid = _resolve_target_version(state, target_alias)
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    result = c.approve_test_cases(state.agent_id, vid, ids)
+    _record_test_case_op("approve", target_alias, result)
+
+    approved = result.get("approved", [])
+    nf = result.get("not_found", [])
+    already = result.get("already_approved", [])
+    lines = [f"**Approved {len(approved)} case(s)** on {target_alias}"]
+    if already:
+        lines.append(f"_({len(already)} already approved — no-op)_")
+    if nf:
+        lines.append("")
+        lines.append(f"⚠ Not found at this version: {', '.join(nf)}")
+    lines.append("")
+    lines.append("Run `/asserten-deploy-gate` to start enforcing the "
+                 "no-regression promise on these.")
+    return "\n".join(lines)
+
+
+def cmd_unapprove(args: dict) -> str:
+    """args: {test_case_ids: [...], target?: ...} or raw csv."""
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    ids = args.get("test_case_ids") or []
+    if not ids and "_raw" in args:
+        ids = [x.strip() for x in args["_raw"].split(",") if x.strip()]
+    if not ids:
+        return ("Pass `test_case_ids` or a comma-separated list of ids to "
+                "unapprove.")
+
+    target_alias = args.get("target") or "v1"
+    try:
+        _, vid = _resolve_target_version(state, target_alias)
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    result = c.unapprove_test_cases(state.agent_id, vid, ids)
+    _record_test_case_op("unapprove", target_alias, result)
+
+    unapproved = result.get("unapproved", [])
+    nf = result.get("not_found", [])
+    already = result.get("already_unapproved", [])
+    lines = [f"**Unapproved {len(unapproved)} case(s)** on {target_alias}"]
+    if already:
+        lines.append(f"_({len(already)} were already unapproved — no-op)_")
+    if nf:
+        lines.append(f"⚠ Not found at this version: {', '.join(nf)}")
+    return "\n".join(lines)
+
+
+def cmd_scenarios(args: dict) -> str:
+    """args: {target?: v0|v1|v2a|v2b}."""
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    target_alias = args.get("target") or args.get("_raw") or "v1"
+    target_alias = target_alias.strip().lower() if isinstance(target_alias, str) else "v1"
+    try:
+        _, vid = _resolve_target_version(state, target_alias)
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    view = c.get_scenarios(state.agent_id, vid)
+    return render_scenarios_table(view)
+
+
+def cmd_deploy_gate(args: dict) -> str:
+    """args: {candidate?: v2b, baseline?: v1}."""
+    state = load_session()
+    if not state.agent_id:
+        return "No agent in session. Run `/asserten-ingest` first."
+
+    candidate_alias = args.get("candidate") or "v2b"
+    baseline_alias = args.get("baseline") or "v1"
+    try:
+        _, cand_vid = _resolve_target_version(state, candidate_alias)
+        _, base_vid = _resolve_target_version(state, baseline_alias)
+    except ValueError as exc:
+        return f"⚠ {exc}"
+
+    c = _client(state)
+    try:
+        result = c.run_deploy_gate(state.agent_id, cand_vid, base_vid)
+    except AssertenError as exc:
+        # Backend HTTP 400 (no eval on one side) — surface its message.
+        update_session(last_error=str(exc))
+        return f"⚠ Gate could not run: {exc}"
+
+    return render_gate_result(result)
+
+
 _DISPATCH = {
     "status": cmd_status,
     "reset": cmd_reset,
@@ -598,6 +717,10 @@ _DISPATCH = {
     "optimize-light": cmd_optimize_light,
     "optimize-deep": cmd_optimize_deep,
     "compare": cmd_compare,
+    "approve": cmd_approve,
+    "unapprove": cmd_unapprove,
+    "scenarios": cmd_scenarios,
+    "deploy-gate": cmd_deploy_gate,
 }
 
 

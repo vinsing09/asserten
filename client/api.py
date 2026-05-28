@@ -14,7 +14,8 @@ from typing import Any
 import httpx
 
 from client.models import (
-    Agent, AgentVersion, EvalSummary, FailureCase, OptimizeResult, Patch,
+    Agent, AgentVersion, EvalSummary, FailureCase,
+    GateResult, OptimizeResult, Patch, ScenariosView,
 )
 
 
@@ -45,12 +46,14 @@ class AssertenClient:
 
     def _request(self, method: str, path: str, *,
                  json_body: dict | None = None,
+                 params: dict | None = None,
                  timeout: float | None = None) -> Any:
         url = f"{self.backend_url}{path}"
         mutating = method.upper() != "GET"
         headers = self._headers(mutating)
         with httpx.Client(timeout=timeout or self.default_timeout) as c:
-            resp = c.request(method, url, headers=headers, json=json_body)
+            resp = c.request(method, url, headers=headers,
+                             json=json_body, params=params)
         if resp.status_code >= 400:
             raise AssertenError(resp.status_code, resp.text, url)
         if resp.headers.get("content-type", "").startswith("application/json"):
@@ -196,6 +199,68 @@ class AssertenClient:
             json_body={"test_case_ids": test_case_ids},
             timeout=30,
         )
+
+    # ─── Approve / scenarios / deploy-gate (2026-05-29) ──────────────────
+
+    def approve_test_cases(
+        self, agent_id: str, version_id: str, test_case_ids: list[str],
+    ) -> dict:
+        """POST /test-cases/approve → {approved, not_found, already_approved}.
+
+        Promotes test cases into the customer's guaranteed set. Deploy-gate
+        blocks any new version that regresses on these. Idempotent —
+        re-approving an already-approved case is a no-op."""
+        return self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{version_id}/test-cases/approve",
+            json_body={"test_case_ids": test_case_ids},
+            timeout=30,
+        )
+
+    def unapprove_test_cases(
+        self, agent_id: str, version_id: str, test_case_ids: list[str],
+    ) -> dict:
+        """POST /test-cases/unapprove → {unapproved, not_found, already_unapproved}.
+
+        Inverse of approve — removes cases from the guaranteed set."""
+        return self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{version_id}/test-cases/unapprove",
+            json_body={"test_case_ids": test_case_ids},
+            timeout=30,
+        )
+
+    def get_scenarios(
+        self, agent_id: str, version_id: str,
+    ) -> ScenariosView:
+        """GET /scenarios → tile per non-skipped test case with status from
+        latest eval. Renders as the outcome-dashboard surface in chat."""
+        d = self._request(
+            "GET",
+            f"/agents/{agent_id}/versions/{version_id}/scenarios",
+            timeout=30,
+        )
+        return ScenariosView.from_api(d)
+
+    def run_deploy_gate(
+        self,
+        agent_id: str,
+        candidate_version_id: str,
+        baseline_version_id: str,
+    ) -> GateResult:
+        """POST /deploy-gate → verdict + per-case classifications.
+
+        v0.1: both versions must already have eval_runs. Reads the latest
+        eval per version, classifies each approved case as
+        regression / improvement / stable_pass / stable_fail / coverage_gap.
+        Verdict BLOCKED if any regression; otherwise PASSED."""
+        d = self._request(
+            "POST",
+            f"/agents/{agent_id}/versions/{candidate_version_id}/deploy-gate",
+            params={"baseline_version_id": baseline_version_id},
+            timeout=60,
+        )
+        return GateResult.from_api(d)
 
     def add_byoe_test_cases(
         self, agent_id: str, version_id: str, simple_cases: list[dict],

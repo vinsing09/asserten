@@ -106,6 +106,86 @@ class EvalSummary:
         )
 
 
+# ── 2026-05-29 scenarios + deploy-gate ─────────────────────────────────
+
+
+@dataclass
+class ScenarioTile:
+    """One scenario tile in the customer-facing outcome view."""
+    test_case_id: str
+    scenario_name: str
+    tags: list[str] = field(default_factory=list)
+    approved: bool = False
+    # passed / failed / judge_error / not_yet_evaluated
+    status: str = "not_yet_evaluated"
+    failure_origin: str | None = None
+    reason: str | None = None
+    last_run_id: str | None = None
+    agent_excerpt: str | None = None
+
+    @classmethod
+    def from_api(cls, d: dict) -> "ScenarioTile":
+        return cls(
+            test_case_id=d["test_case_id"],
+            scenario_name=d.get("scenario_name", ""),
+            tags=list(d.get("tags") or []),
+            approved=bool(d.get("approved", False)),
+            status=d.get("status", "not_yet_evaluated"),
+            failure_origin=d.get("failure_origin"),
+            reason=d.get("reason"),
+            last_run_id=d.get("last_run_id"),
+            agent_excerpt=d.get("agent_excerpt"),
+        )
+
+
+@dataclass
+class ScenariosView:
+    """Backend GET /scenarios response wrapped."""
+    version_id: str
+    latest_run_id: str | None
+    scenarios: list[ScenarioTile] = field(default_factory=list)
+    summary: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_api(cls, d: dict) -> "ScenariosView":
+        return cls(
+            version_id=d.get("version_id", ""),
+            latest_run_id=d.get("latest_run_id"),
+            scenarios=[ScenarioTile.from_api(s) for s in d.get("scenarios", [])],
+            summary=d.get("summary") or {},
+        )
+
+
+@dataclass
+class GateResult:
+    """Backend POST /deploy-gate response wrapped."""
+    verdict: str  # PASSED / BLOCKED / PASSED_NO_APPROVED
+    candidate_version_id: str
+    baseline_version_id: str
+    approved_count: int = 0
+    regressions: list[dict] = field(default_factory=list)
+    improvements: list[dict] = field(default_factory=list)
+    stable_pass: list[dict] = field(default_factory=list)
+    stable_fail: list[dict] = field(default_factory=list)
+    coverage_gaps: list[dict] = field(default_factory=list)
+    reason: str = ""
+
+    @classmethod
+    def from_api(cls, d: dict) -> "GateResult":
+        return cls(
+            verdict=d.get("verdict", "UNKNOWN"),
+            candidate_version_id=d.get("candidate_version_id", ""),
+            baseline_version_id=d.get("baseline_version_id", ""),
+            approved_count=int(d.get("approved_count", 0) or 0),
+            regressions=list(d.get("regressions") or []),
+            improvements=list(d.get("improvements") or []),
+            stable_pass=list(d.get("stable_pass") or []),
+            stable_fail=list(d.get("stable_fail") or []),
+            coverage_gaps=list(d.get("coverage_gaps") or []),
+            reason=d.get("reason", ""),
+        )
+
+
 @dataclass
 class FailureCase:
     test_case_id: str

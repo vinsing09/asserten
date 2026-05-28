@@ -5,7 +5,10 @@ Keep ANSI/colors out so the same output reads cleanly in a future web UI.
 """
 from __future__ import annotations
 
-from client.models import EvalSummary, OptimizeResult, Patch, SessionState
+from client.models import (
+    EvalSummary, GateResult, OptimizeResult, Patch,
+    ScenariosView, SessionState,
+)
 
 
 def render_audit_patches(patches: list[Patch]) -> str:
@@ -135,3 +138,114 @@ def render_session_summary(state: SessionState) -> str:
         parts.append(f"last test-case op: `{op_name}` on {op.get('target','?')} "
                      f"at {op.get('at','?')[:19]} — " + ", ".join(summary_bits))
     return "\n".join(parts)
+
+
+# ── 2026-05-29 scenarios + deploy-gate ──────────────────────────────────
+
+
+_STATUS_GLYPH = {
+    "passed": "✓",
+    "failed": "✗",
+    "judge_error": "?",
+    "not_yet_evaluated": "·",
+    "unknown": "·",
+}
+
+
+def render_scenarios_table(view: ScenariosView) -> str:
+    """Markdown table view of scenario tiles. Approved cases listed first
+    with a 🔒 marker so the customer sees their guaranteed set at a glance."""
+    if not view.scenarios:
+        return ("No scenarios yet. Generate test cases first via "
+                "`/asserten-audit` + `/asserten-select`, then re-run.")
+    s = view.summary or {}
+    header = [
+        f"**Scenarios for version `{view.version_id[:12]}`** "
+        f"(latest eval: `{(view.latest_run_id or 'none')[:12]}`)",
+        f"- total: {s.get('total', 0)} · "
+        f"approved: {s.get('approved', 0)} "
+        f"(passing {s.get('approved_passing', 0)} / "
+        f"failing {s.get('approved_failing', 0)}) · "
+        f"not-yet-eval: {s.get('not_yet_evaluated', 0)}",
+        "",
+        "| | scenario | status | tags | origin |",
+        "|---|---|---|---|---|",
+    ]
+    rows: list[str] = []
+    sorted_tiles = sorted(
+        view.scenarios,
+        key=lambda t: (
+            not t.approved,
+            {"failed": 0, "judge_error": 1, "not_yet_evaluated": 2,
+             "passed": 3, "unknown": 4}.get(t.status, 5),
+            t.scenario_name,
+        ),
+    )
+    for t in sorted_tiles:
+        approved_marker = "🔒" if t.approved else ""
+        glyph = _STATUS_GLYPH.get(t.status, "·")
+        status_cell = f"{glyph} {t.status}"
+        tags = ", ".join(t.tags) if t.tags else "—"
+        origin = t.failure_origin or "—"
+        scenario = t.scenario_name.replace("|", "\\|")
+        rows.append(
+            f"| {approved_marker} | `{t.test_case_id[:8]}` {scenario} | "
+            f"{status_cell} | {tags} | {origin} |"
+        )
+    return "\n".join(header + rows)
+
+
+def render_gate_result(result: GateResult) -> str:
+    """Markdown summary of a deploy-gate verdict. BLOCKED puts the
+    regression list right after the verdict line so it's impossible
+    to miss."""
+    verdict_glyph = {
+        "PASSED": "✓ PASSED",
+        "BLOCKED": "🛑 BLOCKED",
+        "PASSED_NO_APPROVED": "⚠ PASSED (no approved scenarios)",
+    }.get(result.verdict, result.verdict)
+
+    cand = result.candidate_version_id[:12]
+    base = result.baseline_version_id[:12]
+
+    lines = [
+        f"**Deploy-gate verdict: {verdict_glyph}**",
+        f"candidate `{cand}` vs baseline `{base}` on "
+        f"{result.approved_count} approved scenario"
+        f"{'s' if result.approved_count != 1 else ''}",
+        "",
+        f"> {result.reason}",
+    ]
+
+    if result.regressions:
+        lines.append("")
+        lines.append("**Regressions** (these block the deploy):")
+        lines.append("| scenario | baseline → candidate | origin | reason |")
+        lines.append("|---|---|---|---|")
+        for r in result.regressions:
+            scenario = (r.get("scenario_name") or "").replace("|", "\\|")
+            reason = (r.get("candidate_reason") or "")[:80]
+            reason = reason.replace("|", "\\|")
+            lines.append(
+                f"| {scenario} | "
+                f"{r.get('baseline_status', '?')} → "
+                f"{r.get('candidate_status', '?')} | "
+                f"{r.get('failure_origin') or '—'} | {reason} |"
+            )
+
+    counts: list[str] = []
+    if result.improvements:
+        counts.append(f"{len(result.improvements)} improvement"
+                      f"{'s' if len(result.improvements) != 1 else ''}")
+    if result.stable_pass:
+        counts.append(f"{len(result.stable_pass)} stable_pass")
+    if result.stable_fail:
+        counts.append(f"{len(result.stable_fail)} stable_fail")
+    if result.coverage_gaps:
+        counts.append(f"{len(result.coverage_gaps)} coverage_gap"
+                      f"{'s' if len(result.coverage_gaps) != 1 else ''}")
+    if counts:
+        lines.append("")
+        lines.append("Other classifications: " + ", ".join(counts))
+
+    return "\n".join(lines)
