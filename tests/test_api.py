@@ -79,6 +79,31 @@ def test_run_eval_propagates_test_case_source(client):
 
 
 @respx.mock
+def test_run_eval_propagates_environment_id(client):
+    """Phase 4 upstream-lift: run_eval can target a specific environment
+    (e.g. a hybrid env with per-tool live/stub routing)."""
+    route = respx.post(f"{BACKEND}/agents/a/versions/v/eval-runs").mock(
+        return_value=httpx.Response(200, json={"summary": {"pass_rate": 90}})
+    )
+    client.run_eval("a", "v", environment_id="env_hybrid_123")
+    body = route.calls.last.request.read().decode()
+    assert "env_hybrid_123" in body
+    assert "environment_id" in body
+
+
+@respx.mock
+def test_run_eval_omits_environment_id_when_none(client):
+    """Backwards-compat: when environment_id is None, the body must NOT
+    include the key (old backends would error on unexpected fields)."""
+    route = respx.post(f"{BACKEND}/agents/a/versions/v/eval-runs").mock(
+        return_value=httpx.Response(200, json={"summary": {"pass_rate": 90}})
+    )
+    client.run_eval("a", "v")
+    body = route.calls.last.request.read().decode()
+    assert "environment_id" not in body
+
+
+@respx.mock
 def test_add_user_test_cases_sends_payload_and_returns_result(client):
     route = respx.post(
         f"{BACKEND}/agents/a/versions/v/test-cases/user-provided"

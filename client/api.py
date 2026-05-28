@@ -221,10 +221,16 @@ class AssertenClient:
     # ─── Eval ─────────────────────────────────────────────────────────────
 
     def run_eval(self, agent_id: str, version_id: str,
-                 test_case_source_version_id: str | None = None) -> EvalSummary:
+                 test_case_source_version_id: str | None = None,
+                 environment_id: str | None = None) -> EvalSummary:
+        """Run an eval on a version. `environment_id` selects a pluggable
+        env (stub / stateless / hybrid / http / tau_bench); None defaults
+        to stub for multi_turn agents and stateless otherwise."""
         body: dict = {"run_type": "full"}
         if test_case_source_version_id:
             body["test_case_source_version_id"] = test_case_source_version_id
+        if environment_id:
+            body["environment_id"] = environment_id
         d = self._request(
             "POST",
             f"/agents/{agent_id}/versions/{version_id}/eval-runs",
