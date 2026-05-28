@@ -75,6 +75,35 @@ def test_eval_summary_with_validity_fields():
     assert s.non_agent_failure_pct == 0.20
 
 
+def test_eval_summary_lineage_roundtrip():
+    """Lineage triplet (handoff item 9): kind + version + locked-case count
+    must roundtrip from the backend summary so future cross-run comparisons
+    can detect kind/test-mix drift."""
+    s = EvalSummary.from_api({
+        "pass_rate": 95, "total": 13, "passed": 12, "failed": 1,
+        "invalid": False, "judge_error_rate": 0,
+        "lineage": {
+            "agent_kind": "multi_turn",
+            "agent_version_id": "ver_abc123",
+            "total_cases": 13,
+            "locked_cases": 3,
+            "run_type": "full",
+        },
+    })
+    assert s.lineage["agent_kind"] == "multi_turn"
+    assert s.lineage["agent_version_id"] == "ver_abc123"
+    assert s.lineage["locked_cases"] == 3
+
+
+def test_eval_summary_lineage_defaults_to_empty_when_absent():
+    """Backwards-compat: a backend that doesn't return `lineage` yet should
+    not crash parsing — the field defaults to an empty dict."""
+    s = EvalSummary.from_api({
+        "pass_rate": 80, "total": 10, "passed": 8, "failed": 2,
+    })
+    assert s.lineage == {}
+
+
 def test_session_state_round_trip():
     s = SessionState(
         backend_url="http://x", api_key="k", agent_id="a",

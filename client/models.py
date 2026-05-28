@@ -85,6 +85,10 @@ class EvalSummary:
     validity_warning: str | None = None
     failure_origin_breakdown: dict = field(default_factory=dict)
     non_agent_failure_pct: float = 0.0
+    # Lineage triplet (handoff item 9): kind + version + locked-case count
+    # together identify what was actually run. Two pass rates with different
+    # kind / case-mix shouldn't be compared.
+    lineage: dict = field(default_factory=dict)
 
     @classmethod
     def from_api(cls, d: dict) -> "EvalSummary":
@@ -98,6 +102,7 @@ class EvalSummary:
             validity_warning=d.get("validity_warning"),
             failure_origin_breakdown=d.get("failure_origin_breakdown") or {},
             non_agent_failure_pct=float(d.get("non_agent_failure_pct", 0.0) or 0.0),
+            lineage=d.get("lineage") or {},
         )
 
 
