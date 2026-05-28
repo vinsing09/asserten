@@ -78,6 +78,13 @@ class EvalSummary:
     failed: int = 0
     invalid: bool = False
     judge_error_rate: float = 0.0
+    # Phase 1a upstream-lift: distinguishes agent failure from infra failure.
+    # validity_warning is a human-readable string when >=20% of results came
+    # from non-agent origins; None otherwise. failure_origin_breakdown maps
+    # origin name → count (e.g. {"agent": 12, "env": 3, "judge": 1}).
+    validity_warning: str | None = None
+    failure_origin_breakdown: dict = field(default_factory=dict)
+    non_agent_failure_pct: float = 0.0
 
     @classmethod
     def from_api(cls, d: dict) -> "EvalSummary":
@@ -88,6 +95,9 @@ class EvalSummary:
             failed=d.get("failed", 0),
             invalid=bool(d.get("invalid", False)),
             judge_error_rate=float(d.get("judge_error_rate", 0.0) or 0.0),
+            validity_warning=d.get("validity_warning"),
+            failure_origin_breakdown=d.get("failure_origin_breakdown") or {},
+            non_agent_failure_pct=float(d.get("non_agent_failure_pct", 0.0) or 0.0),
         )
 
 

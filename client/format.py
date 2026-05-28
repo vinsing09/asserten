@@ -54,10 +54,19 @@ def render_eval_summary(label: str, summary: EvalSummary) -> str:
         return (f"**{label}: INVALID** — judge_error_rate "
                 f"{summary.judge_error_rate:.0%}. Re-run.")
     if summary.pass_rate is None:
-        return f"**{label}: pending** (no pass_rate yet, total={summary.total})"
-    return (f"**{label}:** {summary.pass_rate:.0f}% pass "
-            f"({summary.passed}/{summary.total}, judge_err "
-            f"{summary.judge_error_rate:.0%})")
+        base = f"**{label}: pending** (no pass_rate yet, total={summary.total})"
+    else:
+        base = (f"**{label}:** {summary.pass_rate:.0f}% pass "
+                f"({summary.passed}/{summary.total}, judge_err "
+                f"{summary.judge_error_rate:.0%})")
+    if summary.validity_warning:
+        # >=20% of results were infra failures (env/judge/orchestrator). The
+        # pass_rate is still shown but the operator needs to know it's
+        # standing on shaky ground.
+        breakdown = summary.failure_origin_breakdown or {}
+        breakdown_str = ", ".join(f"{k}={v}" for k, v in sorted(breakdown.items()))
+        base += f"\n> ⚠ {summary.validity_warning} (origins: {breakdown_str})"
+    return base
 
 
 def render_optimize_result(r: OptimizeResult) -> str:

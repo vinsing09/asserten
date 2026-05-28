@@ -96,6 +96,32 @@ def test_render_eval_normal():
     assert "12/13" in out
 
 
+def test_render_eval_with_validity_warning():
+    """Phase 1a upstream-lift: when the backend flags >=20% non-agent
+    failures, surface the warning so the operator knows the pass_rate is
+    standing on shaky ground (infra failures inflating 'fail' count)."""
+    s = EvalSummary(
+        pass_rate=70.0, total=10, passed=7, failed=3,
+        validity_warning="validity_warning: 3/10 results (30%) had non-agent failure_origin",
+        failure_origin_breakdown={"env": 2, "agent": 1},
+        non_agent_failure_pct=0.20,
+    )
+    out = render_eval_summary("v1", s)
+    assert "70%" in out
+    assert "validity_warning" in out
+    assert "env=2" in out
+    assert "agent=1" in out
+
+
+def test_render_eval_no_warning_when_clean():
+    """Regression guard: validity_warning=None must NOT add a warning line."""
+    s = EvalSummary(pass_rate=95.0, total=13, passed=12, judge_error_rate=0.0,
+                    validity_warning=None)
+    out = render_eval_summary("v1", s)
+    assert "⚠" not in out
+    assert "validity_warning" not in out
+
+
 # ─── render_optimize_result ─────────────────────────────────────────────────
 
 

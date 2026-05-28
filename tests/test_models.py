@@ -52,6 +52,27 @@ def test_eval_summary_full():
                               "judge_error_rate": 0})
     assert s.pass_rate == 95
     assert s.total == 13
+    # Phase 1a fields default to None / 0 / {} when absent — backwards compat
+    assert s.validity_warning is None
+    assert s.failure_origin_breakdown == {}
+    assert s.non_agent_failure_pct == 0.0
+
+
+def test_eval_summary_with_validity_fields():
+    """Phase 1a upstream-lift: backend may now return failure_origin
+    breakdown + validity_warning when >=20% of failures came from non-agent
+    origins (env/judge/orchestrator)."""
+    s = EvalSummary.from_api({
+        "pass_rate": 70, "total": 10, "passed": 7, "failed": 3,
+        "invalid": False, "judge_error_rate": 0,
+        "validity_warning": "validity_warning: 3/10 results (30%) had non-agent failure_origin",
+        "failure_origin_breakdown": {"env": 2, "agent": 1},
+        "non_agent_failure_pct": 0.20,
+    })
+    assert s.validity_warning is not None
+    assert "30%" in s.validity_warning
+    assert s.failure_origin_breakdown == {"env": 2, "agent": 1}
+    assert s.non_agent_failure_pct == 0.20
 
 
 def test_session_state_round_trip():
