@@ -703,11 +703,14 @@ def cmd_deploy_gate(args: dict) -> str:
     except ValueError as exc:
         return f"⚠ {exc}"
 
+    auto_eval = args.get("auto_eval", True)
+
     c = _client(state)
     try:
-        result = c.run_deploy_gate(state.agent_id, cand_vid, base_vid)
+        result = c.run_deploy_gate(state.agent_id, cand_vid, base_vid,
+                                   auto_eval=auto_eval)
     except AssertenError as exc:
-        # Backend HTTP 400 (no eval on one side) — surface its message.
+        # Backend HTTP 400 (e.g. no eval + auto_eval=false) — surface its message.
         update_session(last_error=str(exc))
         return f"⚠ Gate could not run: {exc}"
 

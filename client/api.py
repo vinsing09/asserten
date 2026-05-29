@@ -247,18 +247,25 @@ class AssertenClient:
         agent_id: str,
         candidate_version_id: str,
         baseline_version_id: str,
+        auto_eval: bool = True,
     ) -> GateResult:
         """POST /deploy-gate → verdict + per-case classifications.
 
-        v0.1: both versions must already have eval_runs. Reads the latest
-        eval per version, classifies each approved case as
-        regression / improvement / stable_pass / stable_fail / coverage_gap.
-        Verdict BLOCKED if any regression; otherwise PASSED."""
+        Reads the latest eval per version and classifies each approved case as
+        regression / improvement / stable_pass / stable_fail / coverage_gap /
+        judge_inconclusive. Verdict BLOCKED if any regression; INCONCLUSIVE if
+        an eval melted down; otherwise PASSED.
+
+        auto_eval (default True): if a side has no eval run, the backend creates
+        one before comparing instead of returning 400 (so it can take a while)."""
         d = self._request(
             "POST",
             f"/agents/{agent_id}/versions/{candidate_version_id}/deploy-gate",
-            params={"baseline_version_id": baseline_version_id},
-            timeout=60,
+            params={
+                "baseline_version_id": baseline_version_id,
+                "auto_eval": auto_eval,
+            },
+            timeout=600,
         )
         return GateResult.from_api(d)
 

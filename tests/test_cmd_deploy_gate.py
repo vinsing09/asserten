@@ -35,9 +35,12 @@ class _StubClient:
         self.result = result
         self.raises = raises
         self.calls: list[tuple] = []
+        self.kwargs_calls: list[dict] = []
 
-    def run_deploy_gate(self, agent_id, candidate_version_id, baseline_version_id):
+    def run_deploy_gate(self, agent_id, candidate_version_id,
+                        baseline_version_id=None, **kwargs):
         self.calls.append((agent_id, candidate_version_id, baseline_version_id))
+        self.kwargs_calls.append(kwargs)
         if self.raises is not None:
             raise self.raises
         return self.result
@@ -121,6 +124,24 @@ def test_deploy_gate_no_eval_400_surfaced_friendly(session_full, monkeypatch):
     # last_error persisted for forensics
     after = load_session()
     assert after.last_error and "no eval runs" in after.last_error
+
+
+def test_deploy_gate_forwards_auto_eval_flag(session_full, monkeypatch):
+    result = GateResult(verdict="PASSED", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=1, reason="ok")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b", "baseline": "v1", "auto_eval": False})
+    assert stub.kwargs_calls[-1].get("auto_eval") is False
+
+
+def test_deploy_gate_auto_eval_defaults_true(session_full, monkeypatch):
+    result = GateResult(verdict="PASSED", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=1, reason="ok")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b", "baseline": "v1"})
+    assert stub.kwargs_calls[-1].get("auto_eval") is True
 
 
 def test_deploy_gate_passed_no_approved(session_full, monkeypatch):
