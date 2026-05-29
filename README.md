@@ -158,7 +158,7 @@ Or run the whole core flow with one command: `/asserten-run examples/sample_agen
 ## How it's built
 
 ```
-asserten/                         the plugin (this repo, public, MIT)
+asserten/                         the plugin (this repo, public)
 ├── .claude-plugin/               plugin + marketplace manifests
 ├── commands/   *.md              21 slash commands — each invokes the CLI
 ├── client/
@@ -239,7 +239,3 @@ ASSERTEN_E2E_BACKEND_URL=http://localhost:8000 \
 ```
 
 `PROJECT_KNOWLEDGE.md` has architecture decisions, layout, and chronological history.
-
-## License
-
-MIT.

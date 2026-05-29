@@ -109,7 +109,7 @@ do Y" and fills in the rest.
 - **Your key is capped** (3 agents) so you can't run up a surprise bill, and your
   token usage is tracked transparently.
 - **You never share your own LLM keys** — the backend holds those.
-- **Open source** (MIT): [github.com/vinsing09/asserten](https://github.com/vinsing09/asserten)
+- **Source**: [github.com/vinsing09/asserten](https://github.com/vinsing09/asserten)
 
 Stuck? A connection error almost always means `ASSERTEN_BACKEND_URL` is wrong
 or unreachable; a 401 means the key is not set.
