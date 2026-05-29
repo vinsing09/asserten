@@ -587,17 +587,16 @@ def cmd_compare(args: dict) -> str:
 
 
 def cmd_approve(args: dict) -> str:
-    """args: {test_case_ids: [...], target?: v0|v1|v2a|v2b} or raw csv."""
+    """args: {test_case_ids: [...], target?: v0|v1|v2a|v2b} or raw csv.
+
+    The raw token `all-passing` (or `all_passing`) approves every scenario
+    currently green on the target version (resolved via /scenarios)."""
     state = load_session()
     if not state.agent_id:
         return "No agent in session. Run `/asserten-ingest` first."
 
-    ids = args.get("test_case_ids") or []
-    if not ids and "_raw" in args:
-        ids = [x.strip() for x in args["_raw"].split(",") if x.strip()]
-    if not ids:
-        return ("Pass `test_case_ids` (a list) or a comma-separated list of "
-                "test-case ids to approve.")
+    raw = (args.get("_raw") or "").strip().lower()
+    all_passing = raw in ("all-passing", "all_passing") or args.get("all_passing") is True
 
     target_alias = args.get("target") or "v1"
     try:
@@ -606,6 +605,23 @@ def cmd_approve(args: dict) -> str:
         return f"⚠ {exc}"
 
     c = _client(state)
+
+    if all_passing:
+        view = c.get_scenarios(state.agent_id, vid)
+        ids = [t.test_case_id for t in view.scenarios if t.status == "passed"]
+        if not ids:
+            return (f"No passing scenarios to approve on {target_alias}. "
+                    "Run `/asserten-eval` first, or check `/asserten-scenarios` "
+                    "to see current statuses.")
+    else:
+        ids = args.get("test_case_ids") or []
+        if not ids and "_raw" in args:
+            ids = [x.strip() for x in args["_raw"].split(",") if x.strip()]
+        if not ids:
+            return ("Pass `test_case_ids` (a list), a comma-separated list of "
+                    "test-case ids, or `all-passing` to approve every green "
+                    "scenario.")
+
     result = c.approve_test_cases(state.agent_id, vid, ids)
     _record_test_case_op("approve", target_alias, result)
 

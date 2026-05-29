@@ -16,6 +16,8 @@ safe default for v0.1.
 
 - **List:** `/asserten-approve {"test_case_ids": ["id_1", "id_2"]}`
 - **Comma-separated:** `/asserten-approve id_1, id_2, id_3`
+- **All currently-green:** `/asserten-approve all-passing` — approves every
+  scenario whose latest-eval status is `passed` on the target version.
 
 By default targets v1 (most common). Pass `target=v0|v1|v2a|v2b` to scope.
 

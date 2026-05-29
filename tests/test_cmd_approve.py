@@ -33,11 +33,13 @@ def session_with_v1(tmp_path, monkeypatch):
 
 
 class _StubClient:
-    def __init__(self, *, approve_returns=None, unapprove_returns=None):
+    def __init__(self, *, approve_returns=None, unapprove_returns=None,
+                 scenarios_view=None):
         self.approve_returns = approve_returns or {
             "approved": [], "not_found": [], "already_approved": []}
         self.unapprove_returns = unapprove_returns or {
             "unapproved": [], "not_found": [], "already_unapproved": []}
+        self.scenarios_view = scenarios_view
         self.approve_calls: list[tuple] = []
         self.unapprove_calls: list[tuple] = []
 
@@ -48,6 +50,9 @@ class _StubClient:
     def unapprove_test_cases(self, agent_id, version_id, ids):
         self.unapprove_calls.append((agent_id, version_id, ids))
         return self.unapprove_returns
+
+    def get_scenarios(self, agent_id, version_id):
+        return self.scenarios_view
 
 
 def _patch_client(monkeypatch, stub: _StubClient) -> None:
@@ -150,6 +155,58 @@ def test_approve_target_v2a_routes(session_with_v1, monkeypatch):
     assert stub.approve_calls[0][1] == "v2aid"  # routed to v2a not v1
     after = load_session()
     assert after.last_test_case_op["target"] == "v2a"
+
+
+# ── all-passing shortcut ─────────────────────────────────────────────────────
+
+
+def test_approve_all_passing_approves_only_green_tiles(session_with_v1, monkeypatch):
+    from client.models import ScenariosView, ScenarioTile
+    view = ScenariosView(
+        version_id="v1id", latest_run_id="r",
+        scenarios=[
+            ScenarioTile(test_case_id="tc_p1", scenario_name="a", status="passed"),
+            ScenarioTile(test_case_id="tc_p2", scenario_name="b", status="passed"),
+            ScenarioTile(test_case_id="tc_f1", scenario_name="c", status="failed"),
+            ScenarioTile(test_case_id="tc_n1", scenario_name="d",
+                         status="not_yet_evaluated"),
+        ], summary={})
+    stub = _StubClient(
+        approve_returns={"approved": ["tc_p1", "tc_p2"], "not_found": [],
+                         "already_approved": []},
+        scenarios_view=view)
+    _patch_client(monkeypatch, stub)
+
+    out = cmd_approve({"_raw": "all-passing"})
+
+    # only the two passing tiles get approved
+    assert stub.approve_calls[-1][2] == ["tc_p1", "tc_p2"]
+    assert "Approved 2 new case(s)" in out
+
+
+def test_approve_all_passing_underscore_alias(session_with_v1, monkeypatch):
+    from client.models import ScenariosView, ScenarioTile
+    view = ScenariosView(version_id="v1id", latest_run_id="r",
+        scenarios=[ScenarioTile(test_case_id="tc_p1", scenario_name="a",
+                                status="passed")], summary={})
+    stub = _StubClient(approve_returns={"approved": ["tc_p1"], "not_found": [],
+                                        "already_approved": []},
+                       scenarios_view=view)
+    _patch_client(monkeypatch, stub)
+    cmd_approve({"_raw": "all_passing"})
+    assert stub.approve_calls[-1][2] == ["tc_p1"]
+
+
+def test_approve_all_passing_no_green_is_noop(session_with_v1, monkeypatch):
+    from client.models import ScenariosView, ScenarioTile
+    view = ScenariosView(version_id="v1id", latest_run_id="r",
+        scenarios=[ScenarioTile(test_case_id="tc_f1", scenario_name="c",
+                                status="failed")], summary={})
+    stub = _StubClient(scenarios_view=view)
+    _patch_client(monkeypatch, stub)
+    out = cmd_approve({"_raw": "all-passing"})
+    assert "no passing scenarios" in out.lower()
+    assert not stub.approve_calls
 
 
 # ── unapprove ────────────────────────────────────────────────────────────────
