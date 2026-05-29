@@ -738,9 +738,11 @@ def cmd_deploy_gate(args: dict) -> str:
                                    auto_eval=auto_eval, strict=strict)
     except AssertenError as exc:
         # Backend HTTP 400 (e.g. no eval + auto_eval=false) — surface its message.
-        update_session(last_error=str(exc))
+        update_session(last_error=str(exc), last_gate_verdict="ERROR")
         return f"⚠ Gate could not run: {exc}"
 
+    # Persist the verdict so `ci` mode (handled in main) can set the exit code.
+    update_session(last_gate_verdict=result.verdict)
     return render_gate_result(result)
 
 
@@ -767,13 +769,21 @@ _DISPATCH = {
 }
 
 
+def _ci_exit_code(verdict: str) -> int:
+    """CI exit code for a deploy-gate verdict: 0 only when the gate is green
+    (PASSED / PASSED_NO_APPROVED); 1 for BLOCKED / INCONCLUSIVE / ERROR / unknown
+    so a non-green gate fails the pipeline."""
+    return 0 if verdict in ("PASSED", "PASSED_NO_APPROVED") else 1
+
+
 def main() -> None:
     if len(sys.argv) < 2 or sys.argv[1] not in _DISPATCH:
         print(f"Available subcommands: {', '.join(_DISPATCH)}")
         sys.exit(1)
     sub = sys.argv[1]
+    args = _load_args()
     try:
-        out = _DISPATCH[sub](_load_args())
+        out = _DISPATCH[sub](args)
         print(out)
     except AssertenError as exc:
         update_session(last_error=str(exc))
@@ -783,6 +793,10 @@ def main() -> None:
         update_session(last_error=f"{type(exc).__name__}: {exc}")
         print(f"⚠ unexpected error in `{sub}`:\n```\n{traceback.format_exc()}\n```")
         sys.exit(3)
+
+    # CI mode: deploy-gate exits non-zero on a non-green verdict.
+    if sub == "deploy-gate" and args.get("ci"):
+        sys.exit(_ci_exit_code(load_session().last_gate_verdict))
 
 
 if __name__ == "__main__":

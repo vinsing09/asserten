@@ -242,6 +242,8 @@ class SessionState:
     accepted_patch_ids: list[str] = field(default_factory=list)
     candidate_v1_ids: list[str] = field(default_factory=list)
     last_error: str = ""
+    # Verdict of the most recent /asserten-deploy-gate, for CI exit-code mode.
+    last_gate_verdict: str = ""
     # Forensics record of the most recent /asserten-add-tests, /asserten-skip-tests,
     # or /asserten-unskip-tests invocation. Inspect via /asserten-status when an
     # earlier add/skip didn't behave as the customer expected. Shape:

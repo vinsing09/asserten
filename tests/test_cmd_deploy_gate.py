@@ -165,6 +165,39 @@ def test_deploy_gate_auto_eval_defaults_true(session_full, monkeypatch):
     assert stub.kwargs_calls[-1].get("auto_eval") is True
 
 
+def test_ci_exit_code_mapping():
+    from client.cli import _ci_exit_code
+    assert _ci_exit_code("PASSED") == 0
+    assert _ci_exit_code("PASSED_NO_APPROVED") == 0
+    assert _ci_exit_code("BLOCKED") == 1
+    assert _ci_exit_code("INCONCLUSIVE") == 1
+    assert _ci_exit_code("ERROR") == 1
+    assert _ci_exit_code("") == 1
+
+
+def test_deploy_gate_persists_verdict_for_ci(session_full, monkeypatch):
+    from client.session import load_session
+    result = GateResult(verdict="BLOCKED", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=1,
+                        regressions=[{"scenario_name": "x",
+                                      "baseline_status": "passed",
+                                      "candidate_status": "failed"}],
+                        reason="r")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b", "baseline": "v1"})
+    assert load_session().last_gate_verdict == "BLOCKED"
+
+
+def test_deploy_gate_failed_gate_persists_error_verdict(session_full, monkeypatch):
+    from client.session import load_session
+    from client.api import AssertenError
+    stub = _StubClient(raises=AssertenError(400, "no eval", "http://x"))
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b", "baseline": "v1", "auto_eval": False})
+    assert load_session().last_gate_verdict == "ERROR"
+
+
 def test_deploy_gate_omitted_baseline_forwards_none(session_full, monkeypatch):
     """C2: no baseline arg → None forwarded so the backend auto-resolves."""
     result = GateResult(verdict="PASSED", candidate_version_id="v2bid",

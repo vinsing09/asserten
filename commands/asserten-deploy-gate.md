@@ -39,6 +39,8 @@ echo '{"candidate": "v2b"}' | python -m client.cli deploy-gate
   previous eval'd version automatically. Pass `{"baseline": "v1"}` to pin it.
 - `strict` (default true): inconclusive cases block as INCONCLUSIVE; pass
   `{"strict": false}` to treat them as non-blocking.
+- `ci` (default false): when true, the CLI process exits non-zero on a
+  non-green verdict (BLOCKED / INCONCLUSIVE / ERROR) so it can gate a pipeline.
 - Targets accept aliases `v0|v1|v2a|v2b` or raw version_ids.
 
 ## What you do
