@@ -43,13 +43,16 @@ an LLM key and never leaves the `X-Asserten-Key` header.
 
 ```bash
 python -m scripts.api_keys_admin mint --label alice@acme --agents 3   # prints the key once
-python -m scripts.api_keys_admin list                                  # usage per key
+python -m scripts.api_keys_admin list                                  # keys + caps
+python -m scripts.api_keys_admin usage                                 # tokens + $ cost per key
 python -m scripts.api_keys_admin revoke --label alice@acme
 ```
 
 Counting and the cap are enforced automatically; minting/revoking is the only
-manual step. Your own `ASSERTEN_API_KEY` (the backend's env value) is the
-uncapped admin/master key — keep it for yourself.
+manual step. Every LLM call is logged with model + input/output tokens + USD
+cost attributed to the calling key, so `usage` shows exactly what each prospect
+spent. Your own `ASSERTEN_API_KEY` (the backend's env value) is the uncapped
+admin/master key — keep it for yourself.
 
 ## Install
 

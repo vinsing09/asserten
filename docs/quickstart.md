@@ -1,119 +1,95 @@
-# Asserten — Quickstart
+# Asserten
 
-*A Claude Code plugin for making LLM agents measurably more reliable.*
+**Make your AI agent measurably more reliable — and prove it.**
 
-Asserten takes any agent (its system prompt + tool definitions), audits it,
-generates a behavioral test suite, and shows you four versions side by side with
-the pass-rate on a fresh suite for each — then lets you gate deploys on the
-scenarios you care about.
-
-| version | what it is |
-|---|---|
-| **v0** | the prompt you brought, untouched |
-| **v1** | v0 + the audit fixes you accepted |
-| **v2a** | LIGHT optimization — pick-best across candidates (free, instant) |
-| **v2b** | DEEP optimization — full cross-refine (~15 min) |
+*A Claude Code plugin. About 10 minutes to your first result.*
 
 ---
 
-## Before you start: you need a backend
+## The problem
 
-Asserten is a **thin client**. The audit, test generation, evaluation, and
-optimization all run in a separate **backend service** that holds the LLM API
-keys. The plugin just drives it over HTTP — so you never hand your
-Anthropic/OpenAI keys to the plugin.
+You ship an AI agent. It demos well. Then in production it quietly does the
+wrong thing — refunds an order it shouldn't, loops on a tool call, fumbles an
+edge case — and you hear about it from a customer, not a test.
 
-**You need a backend URL and (if it's enforced) an API key before anything will
-run.** Ask whoever shared this with you for both.
+"We tested it" is usually thin. A handful of test cases makes almost any agent
+look good. In our own runs, one agent scored **93% on a 15-case test and 58%
+when we ran 75 cases** — same agent, same prompt. The small test was lying.
 
----
+## What asserten does
 
-## 1. Install (in Claude Code)
+Hand it your agent (its instructions + the tools it can call). Asserten:
 
-**Marketplace (recommended):**
+1. **Audits** the prompt and suggests concrete fixes.
+2. **Generates a real test suite** — dozens of scenarios across happy paths,
+   tool failures, wrong inputs, and edge cases (not the three you'd think of).
+3. **Scores four versions side by side**, each with its pass-rate on that suite:
+
+   | version | what it is |
+   |---|---|
+   | **v0** | the agent you brought |
+   | **v1** | v0 + the audit fixes you accepted |
+   | **v2a / v2b** | lightly / deeply optimized variants |
+
+4. **Gates your deploys.** Approve the scenarios you care about; asserten blocks
+   any new version that regresses on them.
+
+You walk away with one honest number per version — *did this change help or
+hurt?* — and a gate that stops silent regressions before they ship.
+
+## See it in ~10 minutes
+
+You need Claude Code, plus a **backend URL and key** (ask whoever shared this).
+
+**1. Install** (in Claude Code):
 
 ```
 /plugin marketplace add vinsing09/asserten
 /plugin install asserten@asserten
 ```
 
-**Or developer install:**
-
-```bash
-git clone https://github.com/vinsing09/asserten ~/asserten
-cd ~/asserten && pip install -e .
-mkdir -p ~/.claude/plugins && ln -s "$PWD" ~/.claude/plugins/asserten
-```
-
-Restart Claude Code, then type `/asserten` — the commands should autocomplete.
-
-## 2. Configure the backend
-
-In the terminal where you launch Claude Code:
-
-```bash
-export ASSERTEN_BACKEND_URL=https://<your-backend-host>   # default http://localhost:8000
-export ASSERTEN_API_KEY=<the-key-you-were-given>          # per-prospect, capped
-```
-
-If commands fail with a connection error, this is almost always the cause —
-the URL is unreachable or the key is missing.
-
-Your key is **capped (default 3 agents)** — you can run three different agents
-through the flow. After that, committing a 4th agent returns `402 quota
-exhausted`; ask the operator for a fresh key. The key isn't an LLM key — it just
-identifies you to the operator's backend.
-
-## 3. Run the 10-minute flow
-
-A sample agent (`examples/sample_agent.json`) ships with the plugin.
+**2. Point it at the backend** (in your terminal):
 
 ```
-/asserten-ingest examples/sample_agent.json   # hand over the agent → draft
-/asserten-audit                                # see suggested prompt fixes
-/asserten-select all                           # accept them → creates v0 + v1
-/asserten-prepare-eval                          # generate the contract + test cases
-/asserten-eval v0                               # eval the raw agent
-/asserten-eval v1                               # eval the audited agent
-/asserten-compare                               # v0 vs v1 pass-rate table
+export ASSERTEN_BACKEND_URL=<the URL you were given>
+export ASSERTEN_API_KEY=<the key you were given>
 ```
 
-That already answers "did the audit actually help?" To go further:
+**3. Run the flow** on the bundled sample agent:
 
 ```
-/asserten-optimize-deep <eval_run_id>           # optimize v1 → v2b  (~15 min)
-/asserten-eval v2b
-/asserten-scenarios v1                          # ✓/✗ dashboard per scenario
-/asserten-approve all-passing                   # lock in the passing scenarios
-/asserten-deploy-gate {"candidate": "v2b"}      # block a deploy that regresses on them
+/asserten-ingest examples/sample_agent.json
+/asserten-audit
+/asserten-select all
+/asserten-prepare-eval
+/asserten-eval v0
+/asserten-eval v1
+/asserten-compare
 ```
 
-> **Tip:** the test-set size defaults to 40. Override it on
-> `/asserten-prepare-eval {"count": 60}` — 15 is too small (it inflates the
-> pass rate), and very large counts hit a redundancy ceiling.
+## What you'll see
 
-## Command cheat sheet
+A side-by-side comparison with the delta vs your original:
 
-**Setup** — `/asserten` (help) · `/asserten-ingest <path>` · `/asserten-status` · `/asserten-reset`
+```
+version   pass-rate
+v0        62%
+v1        84%   (+22)
+```
 
-**Contract & tests** — `/asserten-audit` · `/asserten-select all|1,3,5|none` ·
-`/asserten-prepare-eval` · `/asserten-show-contract`
+And if you approve scenarios and run the deploy gate on a new version:
 
-**Your own test cases** — `/asserten-byoe` (plain English) ·
-`/asserten-add-tests <path>` · `/asserten-skip-tests <ids>` · `/asserten-unskip-tests <ids>`
+```
+🛑 BLOCKED — 1 approved scenario regressed:
+   "Refund within policy"   passed → failed
+```
 
-**Evaluate & optimize** — `/asserten-eval <v0|v1|v2a|v2b>` · `/asserten-failures` ·
-`/asserten-optimize-light` · `/asserten-optimize-deep <eval_run_id>` · `/asserten-compare`
+That's the whole point: you see exactly what got better, what got worse, and
+nothing ships that breaks a scenario you signed off on.
 
-**Outcomes & deploy gate** — `/asserten-scenarios <version>` ·
-`/asserten-approve <ids|all-passing>` · `/asserten-unapprove <ids>` ·
-`/asserten-deploy-gate {"candidate":"v2b"}`
+## Try your own agent
 
-**One-shot** — `/asserten-run <path>` (drives the whole flow, pausing at patch selection)
-
-## Bring your own agent
-
-Instead of the sample, ingest your own. The shape is:
+Swap the sample for yours — a small JSON file:
 
 ```json
 {
@@ -124,19 +100,16 @@ Instead of the sample, ingest your own. The shape is:
 }
 ```
 
-Save it as a `.json` file and `/asserten-ingest path/to/your_agent.json`.
+Then `/asserten-ingest path/to/your_agent.json` and run the same flow. Prefer
+plain English? `/asserten-byoe` lets you type "the user says X, the agent should
+do Y" and fills in the rest.
 
-## Troubleshooting
+## Good to know
 
-| symptom | fix |
-|---|---|
-| commands don't autocomplete | restart Claude Code; confirm the plugin installed |
-| connection / timeout error | check `ASSERTEN_BACKEND_URL` is reachable |
-| `401` / key error | set `ASSERTEN_API_KEY` to the key you were given |
-| `402` quota exhausted | your key's agent cap (default 3) is used up — ask for a fresh key |
-| "no v1 yet" | run `/asserten-select` before `/asserten-prepare-eval` |
-| eval says "generate contract first" | run `/asserten-prepare-eval` before `/asserten-eval` |
+- **Your key is capped** (3 agents) so you can't run up a surprise bill, and your
+  token usage is tracked transparently.
+- **You never share your own LLM keys** — the backend holds those.
+- **Open source** (MIT): [github.com/vinsing09/asserten](https://github.com/vinsing09/asserten)
 
----
-
-Asserten is MIT-licensed and open: https://github.com/vinsing09/asserten
+Stuck? A connection error almost always means `ASSERTEN_BACKEND_URL` is wrong
+or unreachable; a 401 means the key is not set.
