@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Launcher for the asserten CLI, invoked by every /asserten-* slash command.
+#
+# Fixes the two things that break a fresh plugin install:
+#   1. `python -m client.cli` only resolves when CWD is the plugin root — so we
+#      cd there first (the launcher locates the root from its own path, so it
+#      works no matter where Claude Code runs the command from).
+#   2. The CLI needs httpx + pydantic, which a marketplace install does NOT
+#      install — so on first run we create a local .venv and install them once.
+#
+# Usage (from a command): "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" <subcommand>
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+PY="${ASSERTEN_PYTHON:-python3}"
+if ! "$PY" -c "import httpx, pydantic" >/dev/null 2>&1; then
+  VENV="$ROOT/.venv"
+  if [ ! -x "$VENV/bin/python" ]; then
+    echo "asserten: first-run setup — creating venv + installing httpx, pydantic…" >&2
+    "$PY" -m venv "$VENV" >&2
+    "$VENV/bin/python" -m pip install -q --upgrade pip >&2 || true
+    "$VENV/bin/python" -m pip install -q "httpx>=0.27" "pydantic>=2.5" >&2
+  fi
+  PY="$VENV/bin/python"
+fi
+
+exec "$PY" -m client.cli "$@"

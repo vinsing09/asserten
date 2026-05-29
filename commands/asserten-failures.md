@@ -9,7 +9,7 @@ v0.1 limitation: this command currently surfaces what the eval summary already r
 For now, run:
 
 ```bash
-python -m client.cli status
+"${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" status
 ```
 
 And tell the user: "Detailed per-case failures aren't exposed via the API in v0.1. The eval summary tells you `failed/total`. To dig in, query the backend's `eval_results` table directly via SQL or the next plugin release will surface failures inline."

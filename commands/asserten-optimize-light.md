@@ -7,7 +7,7 @@ description: LIGHT optimize — pick top-1 v1 from K candidates by pass_rate (ze
 Picks the best v1 candidate by pass_rate and records it as v2a.
 
 ```bash
-python -m client.cli optimize-light
+"${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" optimize-light
 ```
 
 ## v0.1 prerequisite

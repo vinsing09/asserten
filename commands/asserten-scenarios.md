@@ -18,7 +18,7 @@ is visible at a glance.
 ## Usage
 
 ```bash
-echo '{"target": "v1"}' | python -m client.cli scenarios
+echo '{"target": "v1"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" scenarios
 ```
 
 By default targets v1. Pass `target=v0|v1|v2a|v2b` to scope.

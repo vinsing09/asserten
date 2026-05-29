@@ -101,19 +101,19 @@ Start the interactive walk-through:
 When ready to submit, run:
 
 ```bash
-echo '{"test_cases": [<all-the-cases>]}' | python -m client.cli byoe
+echo '{"test_cases": [<all-the-cases>]}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" byoe
 ```
 
 ### If user passed a file path:
 
 ```bash
-echo '{"file": "<path>"}' | python -m client.cli byoe
+echo '{"file": "<path>"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" byoe
 ```
 
 ### If user pasted inline JSON:
 
 ```bash
-echo '<their-json>' | python -m client.cli byoe
+echo '<their-json>' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" byoe
 ```
 
 ### After the CLI returns:

@@ -20,7 +20,7 @@ By default targets v1. Pass `target=v0|v1|v2a|v2b` to scope.
 2. Invoke the CLI:
 
 ```bash
-echo '{"test_case_ids": ["..."], "target": "v1"}' | python -m client.cli unapprove
+echo '{"test_case_ids": ["..."], "target": "v1"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" unapprove
 ```
 
 3. Output reports: `unapproved`, `not_found`, `already_unapproved`.

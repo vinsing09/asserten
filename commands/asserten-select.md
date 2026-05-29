@@ -15,7 +15,7 @@ The user's answer to the audit prompt. Forms accepted:
 Pass the answer into the asserten CLI:
 
 ```bash
-echo '{"answer": "<user-answer>"}' | python -m client.cli select
+echo '{"answer": "<user-answer>"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" select
 ```
 
 After this completes successfully, the user has a v0 and v1 in the session.

@@ -28,7 +28,7 @@ Take the user's agent definition and submit it as a draft. The user can either:
 3. Call the asserten CLI with the parsed JSON:
 
 ```bash
-echo '<the-json-as-one-line>' | python -m client.cli ingest
+echo '<the-json-as-one-line>' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" ingest
 ```
 
 4. Show the user the resulting `draft_id` and tell them to run `/asserten-audit` next.

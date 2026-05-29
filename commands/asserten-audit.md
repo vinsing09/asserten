@@ -7,7 +7,7 @@ description: Run the audit pass on the current draft → numbered list of sugges
 Calls the backend audit endpoint and shows suggested patches.
 
 ```bash
-python -m client.cli audit
+"${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" audit
 ```
 
 The output ends with a prompt asking the user which patches to keep. **After the user answers, immediately invoke `/asserten-select <answer>`** — don't wait for them to type the slash command themselves.

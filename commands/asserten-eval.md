@@ -16,7 +16,7 @@ Eval one of the four agent versions and record the pass_rate in session.
 ## What you do
 
 ```bash
-echo '{"target": "<v0|v1|v2a|v2b>"}' | python -m client.cli eval
+echo '{"target": "<v0|v1|v2a|v2b>"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" eval
 ```
 
 The eval runs synchronously. It can take ~30s-3min depending on test case count and judge load. Tell the user "evaluating, this can take up to 3 minutes" before running, then show the result.

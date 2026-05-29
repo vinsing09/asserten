@@ -5,7 +5,7 @@ description: 4-way comparison table — v0 vs v1 vs v2a vs v2b pass_rates and de
 # /asserten-compare
 
 ```bash
-python -m client.cli compare
+"${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" compare
 ```
 
 Shows a markdown table with pass_rates and deltas vs v0 for all four versions. Empty cells mean that version hasn't been eval'd yet.

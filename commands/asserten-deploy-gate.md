@@ -32,7 +32,7 @@ default) before comparing — so a real eval may run and take a while. Pass
 ## Usage
 
 ```bash
-echo '{"candidate": "v2b"}' | python -m client.cli deploy-gate
+echo '{"candidate": "v2b"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" deploy-gate
 ```
 
 - `baseline` is **optional** — omit it (or pass `"auto"`) to compare against the

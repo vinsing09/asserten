@@ -9,7 +9,7 @@ Submits a deep cross-refine job to the backend, polls until done.
 ## Usage
 
 ```bash
-echo '{"eval_run_id": "<from-asserten-eval-v1>"}' | python -m client.cli optimize-deep
+echo '{"eval_run_id": "<from-asserten-eval-v1>"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" optimize-deep
 ```
 
 The `eval_run_id` comes from the most recent `/asserten-eval v1`. v0.1 requires the user (or you) to pass it manually.

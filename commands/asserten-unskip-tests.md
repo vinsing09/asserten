@@ -20,7 +20,7 @@ By default targets v1. Pass `target=v0|v1|v2a|v2b` to scope.
 2. Invoke the CLI:
 
 ```bash
-echo '{"test_case_ids": ["id_1"]}' | python -m client.cli unskip-tests
+echo '{"test_case_ids": ["id_1"]}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" unskip-tests
 ```
 
 3. Show how many were un-skipped + any IDs not found.

@@ -38,10 +38,10 @@ version.
 1. Invoke the CLI:
 
 ```bash
-echo '{"target": "v1"}' | python -m client.cli show-contract
+echo '{"target": "v1"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" show-contract
 ```
 
-(or pass just the target as a raw arg: `python -m client.cli show-contract v1`)
+(or pass just the target as a raw arg: `"${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" show-contract v1`)
 
 2. Read the table. Each row shows the mandate category, the minimum count
    we require, how many were found in the contract, and how many were

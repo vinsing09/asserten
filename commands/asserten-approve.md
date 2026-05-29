@@ -27,7 +27,7 @@ By default targets v1 (most common). Pass `target=v0|v1|v2a|v2b` to scope.
 2. Invoke the CLI:
 
 ```bash
-echo '{"test_case_ids": ["..."], "target": "v1"}' | python -m client.cli approve
+echo '{"test_case_ids": ["..."], "target": "v1"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" approve
 ```
 
 3. Show the output as-is. It reports:

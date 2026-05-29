@@ -160,7 +160,8 @@ Or run the whole core flow with one command: `/asserten-run examples/sample_agen
 ```
 asserten/                         the plugin (this repo, public)
 ├── .claude-plugin/               plugin + marketplace manifests
-├── commands/   *.md              21 slash commands — each invokes the CLI
+├── commands/   *.md              21 slash commands — each invokes the launcher
+├── bin/asserten-cli              launcher: cd to plugin root + ensure deps + run CLI
 ├── client/
 │   ├── cli.py                    dispatch: `python -m client.cli <subcommand>`
 │   ├── api.py                    AssertenClient — the HTTP calls to the backend
@@ -171,8 +172,12 @@ asserten/                         the plugin (this repo, public)
 └── tests/                        ~185 unit tests
 ```
 
-A slash command shells out to `python -m client.cli <subcommand> '<json-args>'`,
-which calls `AssertenClient`, which makes one HTTP request to the backend and
+A slash command shells out to `"${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" <subcommand>`.
+The launcher `cd`s into the plugin root (so `client` imports regardless of the
+caller's working directory) and, on first run, creates a local `.venv` with
+`httpx` + `pydantic` if they aren't already importable — so a marketplace
+install works with no manual `pip install`. It then runs `python -m client.cli`,
+which calls `AssertenClient`, makes one HTTP request to the backend, and
 renders the result as a markdown table. **Session state** (agent_id, the four
 version ids, last eval pass-rates) lives in `~/.asserten/session.json` so each
 command knows what the previous step produced.

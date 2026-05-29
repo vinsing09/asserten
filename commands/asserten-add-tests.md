@@ -69,13 +69,13 @@ specific version — e.g. when iterating on v2a after optimize.
 3. Invoke the CLI:
 
 ```bash
-echo '{"file": "<path>"}' | python -m client.cli add-tests
+echo '{"file": "<path>"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" add-tests
 ```
 
 or with inline cases + target:
 
 ```bash
-echo '{"test_cases": [...], "target": "v1"}' | python -m client.cli add-tests
+echo '{"test_cases": [...], "target": "v1"}' | "${CLAUDE_PLUGIN_ROOT}/bin/asserten-cli" add-tests
 ```
 
 4. Show the user the inserted count + IDs + any per-case errors / warnings.
