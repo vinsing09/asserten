@@ -25,12 +25,31 @@ So to actually run anything you need two things:
 
 ```bash
 export ASSERTEN_BACKEND_URL=https://<your-backend-host>   # default http://localhost:8000
-export ASSERTEN_API_KEY=<your-asserten-key>               # if the backend enforces auth
+export ASSERTEN_API_KEY=<the-key-you-were-given>          # per-prospect; see below
 ```
 
 You never put your Anthropic/OpenAI keys in the plugin — the backend operator
 holds those. Without a reachable backend, the commands install fine but every
 call will fail to connect.
+
+**About the key.** `ASSERTEN_API_KEY` is a per-prospect key the operator issues
+you. It's capped (default **3 agents** — i.e. you can take three different
+agents through the flow). Reads are open; once you've created your 3 agents,
+`/asserten-ingest`-and-commit returns `402 quota exhausted` and you ask for a
+fresh key. The key only gates *your* usage of the operator's backend — it's not
+an LLM key and never leaves the `X-Asserten-Key` header.
+
+**For the operator (issuing keys).** From the agentops-backend host:
+
+```bash
+python -m scripts.api_keys_admin mint --label alice@acme --agents 3   # prints the key once
+python -m scripts.api_keys_admin list                                  # usage per key
+python -m scripts.api_keys_admin revoke --label alice@acme
+```
+
+Counting and the cap are enforced automatically; minting/revoking is the only
+manual step. Your own `ASSERTEN_API_KEY` (the backend's env value) is the
+uncapped admin/master key — keep it for yourself.
 
 ## Install
 

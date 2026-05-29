@@ -53,11 +53,16 @@ In the terminal where you launch Claude Code:
 
 ```bash
 export ASSERTEN_BACKEND_URL=https://<your-backend-host>   # default http://localhost:8000
-export ASSERTEN_API_KEY=<your-key>                        # if the backend enforces auth
+export ASSERTEN_API_KEY=<the-key-you-were-given>          # per-prospect, capped
 ```
 
 If commands fail with a connection error, this is almost always the cause —
 the URL is unreachable or the key is missing.
+
+Your key is **capped (default 3 agents)** — you can run three different agents
+through the flow. After that, committing a 4th agent returns `402 quota
+exhausted`; ask the operator for a fresh key. The key isn't an LLM key — it just
+identifies you to the operator's backend.
 
 ## 3. Run the 10-minute flow
 
@@ -128,6 +133,7 @@ Save it as a `.json` file and `/asserten-ingest path/to/your_agent.json`.
 | commands don't autocomplete | restart Claude Code; confirm the plugin installed |
 | connection / timeout error | check `ASSERTEN_BACKEND_URL` is reachable |
 | `401` / key error | set `ASSERTEN_API_KEY` to the key you were given |
+| `402` quota exhausted | your key's agent cap (default 3) is used up — ask for a fresh key |
 | "no v1 yet" | run `/asserten-select` before `/asserten-prepare-eval` |
 | eval says "generate contract first" | run `/asserten-prepare-eval` before `/asserten-eval` |
 
