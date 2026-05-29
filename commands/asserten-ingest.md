@@ -23,7 +23,11 @@ Take the user's agent definition and submit it as a draft. The user can either:
 
 ## What you do
 
-1. If a file path was provided, read it. If the user pasted JSON inline, parse it.
+1. If a file path was provided, read it. **If a relative path isn't found in the
+   working directory** (e.g. the user passed the bundled `examples/sample_agent.json`),
+   read it from `${CLAUDE_PLUGIN_ROOT}/<that path>` instead — the plugin ships a demo
+   agent at `${CLAUDE_PLUGIN_ROOT}/examples/sample_agent.json`. If the user pasted JSON
+   inline, parse it.
 2. If essential fields (`name`, `raw_system_prompt`) are missing, ask the user to provide them.
 3. Call the asserten CLI with the parsed JSON:
 
