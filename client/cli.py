@@ -118,21 +118,38 @@ def cmd_select(args: dict) -> str:
 
 
 def cmd_prepare_eval(args: dict) -> str:
-    """Generate contract + test cases on v1 — required before any eval."""
+    """Generate contract + test cases on v1 — required before any eval.
+
+    args: {count?: int} — how many test cases to generate. Omit to use the
+    backend's calibrated default (40); 15 is too small (inflates pass rates),
+    higher counts hit a redundancy ceiling. Accepts 1–100."""
     state = load_session()
     if not state.v1_version_id:
         return "No v1 yet. Run `/asserten-select` first."
+
+    count = args.get("count")
+    if count is None and isinstance(args.get("_raw"), str) and args["_raw"].strip().isdigit():
+        count = int(args["_raw"].strip())
+    if count is not None:
+        try:
+            count = int(count)
+        except (TypeError, ValueError):
+            return f"⚠ `count` must be an integer (1–100), got {count!r}."
+        if not 1 <= count <= 100:
+            return "⚠ `count` must be between 1 and 100."
+
     c = _client(state)
     t0 = time.monotonic()
     contract = c.generate_contract(state.agent_id, state.v1_version_id)
     t1 = time.monotonic()
-    tcs = c.generate_test_cases(state.agent_id, state.v1_version_id)
+    tcs = c.generate_test_cases(state.agent_id, state.v1_version_id, count=count)
     n_tcs = tcs.get("count") if isinstance(tcs, dict) else 0
     t2 = time.monotonic()
+    asked = f" (requested {count})" if count is not None else " (backend default)"
     return (f"**Eval prep complete:**\n"
             f"- contract: {len(contract.get('obligations', []))} obligations "
             f"({t1 - t0:.1f}s)\n"
-            f"- test cases: {n_tcs} generated ({t2 - t1:.1f}s)\n\n"
+            f"- test cases: {n_tcs} generated{asked} ({t2 - t1:.1f}s)\n\n"
             f"Now run `/asserten-eval v0` and `/asserten-eval v1`.")
 
 

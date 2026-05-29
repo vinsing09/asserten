@@ -28,6 +28,13 @@ Asserten walks an agent through 4 versions you can compare:
 
 Or run the whole flow with `/asserten-run`.
 
+**Test-set size (optional).** `/asserten-prepare-eval` generates the auto test
+cases. By default it uses the calibrated backend default (**40** — 15 is too
+small and inflates pass rates; very high counts hit a redundancy ceiling).
+Override per run: `/asserten-prepare-eval {"count": 75}` or `/asserten-prepare-eval 60`
+(accepts 1–100). The backend default itself is set via the `TESTCASE_DEFAULT_COUNT`
+env var.
+
 Helpers: `/asserten-status` (current session), `/asserten-reset` (clear).
 
 ## Bring your own test cases (optional, any time after step 3)

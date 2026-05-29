@@ -137,10 +137,17 @@ class AssertenClient:
             f"/agents/{agent_id}/versions/{version_id}/contract",
         )
 
-    def generate_test_cases(self, agent_id: str, version_id: str) -> dict:
+    def generate_test_cases(
+        self, agent_id: str, version_id: str, count: int | None = None,
+    ) -> dict:
+        """Generate the auto test set. `count` is optional — when omitted the
+        backend uses its calibrated default (env TESTCASE_DEFAULT_COUNT, 40);
+        pass an int (1–100) to override per call."""
+        params = {"count": count} if count is not None else None
         return self._request(
             "POST",
             f"/agents/{agent_id}/versions/{version_id}/test-cases/generate",
+            params=params,
             timeout=600,
         )
 
