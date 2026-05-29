@@ -203,6 +203,7 @@ def render_gate_result(result: GateResult) -> str:
         "PASSED": "✓ PASSED",
         "BLOCKED": "🛑 BLOCKED",
         "PASSED_NO_APPROVED": "⚠ PASSED (no approved scenarios)",
+        "INCONCLUSIVE": "🟡 INCONCLUSIVE",
     }.get(result.verdict, result.verdict)
 
     cand = result.candidate_version_id[:12]
@@ -216,6 +217,19 @@ def render_gate_result(result: GateResult) -> str:
         "",
         f"> {result.reason}",
     ]
+
+    # Eval-invalid banner — the verdict couldn't certify because a judge
+    # melted down on one side. Impossible to miss.
+    if result.candidate_eval_invalid or result.baseline_eval_invalid:
+        sides = []
+        if result.candidate_eval_invalid:
+            sides.append(f"candidate ({result.candidate_judge_error_rate:.0%})")
+        if result.baseline_eval_invalid:
+            sides.append(f"baseline ({result.baseline_judge_error_rate:.0%})")
+        lines.append("")
+        lines.append(f"⚠ Could not certify — judge meltdown on "
+                     f"{' and '.join(sides)} judge-error rate. Re-run "
+                     f"`/asserten-eval` and gate again.")
 
     if result.regressions:
         lines.append("")
@@ -231,6 +245,18 @@ def render_gate_result(result: GateResult) -> str:
                 f"{r.get('baseline_status', '?')} → "
                 f"{r.get('candidate_status', '?')} | "
                 f"{r.get('failure_origin') or '—'} | {reason} |"
+            )
+
+    if result.judge_inconclusive:
+        lines.append("")
+        lines.append("**Could not be evaluated** (judge error — re-run eval):")
+        lines.append("| scenario | baseline → candidate |")
+        lines.append("|---|---|")
+        for j in result.judge_inconclusive:
+            scenario = (j.get("scenario_name") or "").replace("|", "\\|")
+            lines.append(
+                f"| {scenario} | {j.get('baseline_status', '?')} → "
+                f"{j.get('candidate_status', '?')} |"
             )
 
     counts: list[str] = []

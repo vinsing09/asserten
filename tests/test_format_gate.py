@@ -70,6 +70,27 @@ def test_other_classification_counts():
     assert "2 coverage_gaps" in out
 
 
+def test_inconclusive_verdict_renders_banner():
+    out = render_gate_result(_gate(
+        verdict="INCONCLUSIVE", approved_count=2,
+        candidate_eval_invalid=True, candidate_judge_error_rate=0.4,
+        reason="Cannot certify: the candidate (40% judge errors) eval melted down."))
+    assert "INCONCLUSIVE" in out
+    assert "could not certify" in out.lower() or "cannot certify" in out.lower() \
+        or "judge meltdown" in out.lower()
+
+
+def test_judge_inconclusive_cases_render_section():
+    out = render_gate_result(_gate(
+        verdict="INCONCLUSIVE", approved_count=2,
+        judge_inconclusive=[{"scenario_name": "lost and found",
+                             "baseline_status": "passed",
+                             "candidate_status": "missing"}]))
+    assert "could not be evaluated" in out.lower()
+    assert "lost and found" in out
+    assert "passed → missing" in out
+
+
 def test_passed_no_approved_verdict_label():
     out = render_gate_result(_gate(
         verdict="PASSED_NO_APPROVED", approved_count=0,

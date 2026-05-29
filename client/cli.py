@@ -704,11 +704,12 @@ def cmd_deploy_gate(args: dict) -> str:
         return f"⚠ {exc}"
 
     auto_eval = args.get("auto_eval", True)
+    strict = args.get("strict", True)
 
     c = _client(state)
     try:
         result = c.run_deploy_gate(state.agent_id, cand_vid, base_vid,
-                                   auto_eval=auto_eval)
+                                   auto_eval=auto_eval, strict=strict)
     except AssertenError as exc:
         # Backend HTTP 400 (e.g. no eval + auto_eval=false) — surface its message.
         update_session(last_error=str(exc))

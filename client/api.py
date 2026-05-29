@@ -248,6 +248,7 @@ class AssertenClient:
         candidate_version_id: str,
         baseline_version_id: str,
         auto_eval: bool = True,
+        strict: bool = True,
     ) -> GateResult:
         """POST /deploy-gate → verdict + per-case classifications.
 
@@ -264,6 +265,7 @@ class AssertenClient:
             params={
                 "baseline_version_id": baseline_version_id,
                 "auto_eval": auto_eval,
+                "strict": strict,
             },
             timeout=600,
         )

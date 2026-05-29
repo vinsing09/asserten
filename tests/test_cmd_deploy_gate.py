@@ -135,6 +135,26 @@ def test_deploy_gate_forwards_auto_eval_flag(session_full, monkeypatch):
     assert stub.kwargs_calls[-1].get("auto_eval") is False
 
 
+def test_deploy_gate_forwards_strict_flag(session_full, monkeypatch):
+    result = GateResult(verdict="PASSED", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=1, reason="ok")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b", "baseline": "v1", "strict": False})
+    assert stub.kwargs_calls[-1].get("strict") is False
+
+
+def test_deploy_gate_renders_inconclusive(session_full, monkeypatch):
+    result = GateResult(verdict="INCONCLUSIVE", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=2,
+                        candidate_eval_invalid=True, candidate_judge_error_rate=0.4,
+                        reason="Cannot certify: candidate eval melted down.")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    out = cmd_deploy_gate({"candidate": "v2b", "baseline": "v1"})
+    assert "INCONCLUSIVE" in out
+
+
 def test_deploy_gate_auto_eval_defaults_true(session_full, monkeypatch):
     result = GateResult(verdict="PASSED", candidate_version_id="v2bid",
                         baseline_version_id="v1id", approved_count=1, reason="ok")

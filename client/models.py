@@ -159,7 +159,7 @@ class ScenariosView:
 @dataclass
 class GateResult:
     """Backend POST /deploy-gate response wrapped."""
-    verdict: str  # PASSED / BLOCKED / PASSED_NO_APPROVED
+    verdict: str  # PASSED / BLOCKED / PASSED_NO_APPROVED / INCONCLUSIVE
     candidate_version_id: str
     baseline_version_id: str
     approved_count: int = 0
@@ -168,6 +168,12 @@ class GateResult:
     stable_pass: list[dict] = field(default_factory=list)
     stable_fail: list[dict] = field(default_factory=list)
     coverage_gaps: list[dict] = field(default_factory=list)
+    judge_inconclusive: list[dict] = field(default_factory=list)
+    candidate_eval_invalid: bool = False
+    baseline_eval_invalid: bool = False
+    candidate_judge_error_rate: float = 0.0
+    baseline_judge_error_rate: float = 0.0
+    strict: bool = True
     reason: str = ""
 
     @classmethod
@@ -182,6 +188,12 @@ class GateResult:
             stable_pass=list(d.get("stable_pass") or []),
             stable_fail=list(d.get("stable_fail") or []),
             coverage_gaps=list(d.get("coverage_gaps") or []),
+            judge_inconclusive=list(d.get("judge_inconclusive") or []),
+            candidate_eval_invalid=bool(d.get("candidate_eval_invalid", False)),
+            baseline_eval_invalid=bool(d.get("baseline_eval_invalid", False)),
+            candidate_judge_error_rate=float(d.get("candidate_judge_error_rate", 0.0) or 0.0),
+            baseline_judge_error_rate=float(d.get("baseline_judge_error_rate", 0.0) or 0.0),
+            strict=bool(d.get("strict", True)),
             reason=d.get("reason", ""),
         )
 
