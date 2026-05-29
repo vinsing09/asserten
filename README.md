@@ -1,113 +1,219 @@
 # asserten
 
-A Claude Code plugin that takes any LLM agent and shows you four versions of it side by side:
+A **Claude Code plugin** that takes any LLM agent and shows you how to make it
+measurably more reliable — by auditing its prompt, generating a behavioral test
+suite, optimizing it, and gating deploys on the scenarios you care about. Every
+step is an `/asserten-*` slash command.
 
-- **v0** — what you brought
-- **v1** — audited + your selected patches
-- **v2a** — LIGHT optimization (free, instant pick-best across K v1 candidates)
-- **v2b** — DEEP optimization (~15 min, ~$10-20 of LLM cost — full cross-refine)
+It produces four versions of your agent, side by side, with the pass-rate delta
+on a fresh test suite for each:
 
-…and tells you the pass-rate delta on a fresh test suite for each.
+| version | what it is |
+|---|---|
+| **v0** | the prompt you brought, untouched |
+| **v1** | v0 + the audit patches you accepted |
+| **v2a** | LIGHT optimization — pick-best across K candidate v1s (free, instant) |
+| **v2b** | DEEP optimization — full cross-refine (~15 min, ~$10–20 of LLM cost) |
 
-## Status
+## ⚠️ It needs a backend
 
-v0.1 — early. Works for solo demos against a self-hosted backend. Public marketplace listing coming after the API surface stabilizes.
+asserten is a **thin client**. All the heavy lifting (audit, test generation,
+eval, judges, optimization) runs in a separate **agentops-backend** service that
+holds the LLM keys. The plugin just drives that backend over HTTP.
 
-## How it works
-
-```
-[your laptop]                     [your backend, hosted]
-.claude-plugins/asserten/  ──HTTP──► api.asserten.dev (or ngrok URL)
-  - 11 slash commands                 - agentops-backend FastAPI
-  - thin Python client                - audit + LIGHT + DEEP optimizers
-  - session in ~/.asserten/           - eval pipeline + judges
-```
-
-Mode A: the backend handles all LLM calls. You don't share your Anthropic/OpenAI keys with the plugin — the backend operator does.
-
-## Install (developer install for now)
+So to actually run anything you need two things:
 
 ```bash
-git clone https://github.com/<USER>/asserten ~/Documents/my_projects/asserten
-cd ~/Documents/my_projects/asserten
-pip install -e .
-
-# Symlink the plugin into Claude Code's plugin dir:
-mkdir -p ~/.claude/plugins
-ln -s ~/Documents/my_projects/asserten ~/.claude/plugins/asserten
+export ASSERTEN_BACKEND_URL=https://<your-backend-host>   # default http://localhost:8000
+export ASSERTEN_API_KEY=<your-asserten-key>               # if the backend enforces auth
 ```
 
-Then restart Claude Code. `/asserten` should autocomplete.
+You never put your Anthropic/OpenAI keys in the plugin — the backend operator
+holds those. Without a reachable backend, the commands install fine but every
+call will fail to connect.
 
-## Configure
+## Install
+
+**Via the plugin marketplace (recommended):**
+
+```
+/plugin marketplace add vinsing09/asserten
+/plugin install asserten@asserten
+```
+
+**Developer install (clone + symlink):**
 
 ```bash
-export ASSERTEN_BACKEND_URL=http://localhost:8000   # or ngrok URL, or api.asserten.dev
-export ASSERTEN_API_KEY=<your-asserten-key>          # only needed if backend enforces it
+git clone https://github.com/vinsing09/asserten ~/Documents/my_projects/asserten
+cd ~/Documents/my_projects/asserten && pip install -e .
+mkdir -p ~/.claude/plugins && ln -s "$PWD" ~/.claude/plugins/asserten
 ```
 
-## First run (10-minute demo)
+Restart Claude Code; type `/asserten` to confirm it loaded.
+
+## The flow (10-minute demo)
 
 ```
-/asserten-ingest examples/sample_agent.json
-/asserten-audit
-# … review patches; reply "all" or "1,3,5"
-/asserten-select all
-/asserten-eval v0
-/asserten-eval v1
-/asserten-optimize-light                # only if you have K candidate v1s — see notes
-/asserten-eval v2a
-/asserten-optimize-deep <eval_run_id>   # ~15 min, ~$10-20
+/asserten-ingest examples/sample_agent.json   # 1. hand over the agent → draft
+/asserten-audit                                # 2. see suggested prompt patches
+/asserten-select all                           # 3. accept patches → creates v0 + v1
+/asserten-prepare-eval                          # 4. generate contract + test cases on v1
+                                                #    (optional: {"count": 75}; default 40)
+/asserten-eval v0                               # 5. eval the raw agent
+/asserten-eval v1                               # 6. eval the audited agent
+/asserten-compare                               # 7. v0 vs v1 pass-rate table
+```
+
+Then optionally optimize and gate:
+
+```
+/asserten-optimize-deep <eval_run_id>           # DEEP optimize v1 → v2b (~15 min)
 /asserten-eval v2b
-/asserten-compare
+/asserten-scenarios v1                          # outcome dashboard (✓/✗ per scenario)
+/asserten-approve all-passing                   # promote green cases to the guaranteed set
+/asserten-deploy-gate {"candidate": "v2b"}      # block the deploy if v2b regresses on them
 ```
 
-Or run the whole flow with one command:
+Or run the whole core flow with one command: `/asserten-run examples/sample_agent.json`.
 
-```
-/asserten-run examples/sample_agent.json
-```
+> **Step 4 matters.** `/asserten-prepare-eval` generates the contract and the
+> test set; eval can't run without it. The set size defaults to 40 (15 is too
+> small and inflates pass rates; very high counts hit a redundancy ceiling).
+> Override per run with `/asserten-prepare-eval {"count": 60}`.
 
-## Slash command reference
+## Command reference (21 commands)
+
+**Setup**
 
 | command | what it does |
 |---|---|
-| `/asserten` | Help / overview |
-| `/asserten-status` | Show current session state |
-| `/asserten-reset` | Clear the session |
-| `/asserten-ingest <path>` | Upload an agent → draft |
-| `/asserten-audit` | Get suggested patches (always shows all + asks which to keep) |
-| `/asserten-select <answer>` | Apply selected patches → v0 + v1 |
-| `/asserten-eval <v0\|v1\|v2a\|v2b>` | Run full eval on a version |
-| `/asserten-failures` | _v0.1_: redirects to status — full failures endpoint pending |
-| `/asserten-optimize-light` | LIGHT (1A pick-best, 0 LLM cost) → v2a |
-| `/asserten-optimize-deep <eval_run_id>` | DEEP (cross-refine, slow) → v2b |
-| `/asserten-compare` | 4-way pass-rate table |
-| `/asserten-run <path>` | Mega-orchestration of all steps above |
+| `/asserten` | help / overview |
+| `/asserten-ingest <path>` | upload an agent (system prompt + tool schemas + goal) → draft |
+| `/asserten-status` | show the current session (what's ingested / eval'd / optimized) |
+| `/asserten-reset` | clear the session to start on a different agent |
 
-## What this gives you
+**Build the contract & test set**
 
-**Concrete: a 4-way pass-rate comparison table with deltas vs your raw v0.** Useful for:
-- Auditing whether your agent's prompt actually hurts vs helps on edge cases
-- Choosing between cheap (LIGHT) vs expensive (DEEP) optimization based on real numbers
-- Identifying which test cases each version flips on (failures endpoint coming in v0.2)
+| command | what it does |
+|---|---|
+| `/asserten-audit` | run the audit → numbered list of suggested prompt patches |
+| `/asserten-select all\|1,3,5\|none` | accept patches → creates v0 (raw) + v1 (audited) |
+| `/asserten-prepare-eval` | generate the contract + auto test cases on v1 (`{"count": N}`) |
+| `/asserten-show-contract` | show the extracted contract + mandate-coverage transparency |
+
+**Bring your own test cases (optional)**
+
+| command | what it does |
+|---|---|
+| `/asserten-byoe` | plain-English: `input` + what the agent should say / call / not do |
+| `/asserten-add-tests <path>` | full-schema JSON upload (for technical users) |
+| `/asserten-skip-tests <ids>` / `/asserten-unskip-tests <ids>` | exclude / re-include cases |
+
+**Evaluate & optimize**
+
+| command | what it does |
+|---|---|
+| `/asserten-eval <v0\|v1\|v2a\|v2b>` | run the full eval on a version |
+| `/asserten-failures` | failing cases for the latest eval |
+| `/asserten-optimize-light` | LIGHT optimize (pick-best across K v1s, 0 LLM cost) → v2a |
+| `/asserten-optimize-deep <eval_run_id>` | DEEP optimize (cross-refine, slow) → v2b |
+| `/asserten-compare` | 4-way pass-rate table with deltas |
+
+**Outcome dashboard & deploy gate**
+
+| command | what it does |
+|---|---|
+| `/asserten-scenarios <version>` | tiles: ✓/✗ status per scenario from the latest eval |
+| `/asserten-approve <ids\|all-passing>` / `/asserten-unapprove <ids>` | manage the guaranteed set |
+| `/asserten-deploy-gate {"candidate":"v2b"}` | BLOCK / PASS / INCONCLUSIVE vs a baseline on approved cases |
+
+**Orchestration**
+
+| command | what it does |
+|---|---|
+| `/asserten-run <path>` | drive the whole flow, pausing at patch selection |
+
+## How it's built
+
+```
+asserten/                         the plugin (this repo, public, MIT)
+├── .claude-plugin/               plugin + marketplace manifests
+├── commands/   *.md              21 slash commands — each invokes the CLI
+├── client/
+│   ├── cli.py                    dispatch: `python -m client.cli <subcommand>`
+│   ├── api.py                    AssertenClient — the HTTP calls to the backend
+│   ├── models.py                 dataclasses (SessionState, GateResult, …)
+│   ├── format.py                 render markdown tables for chat output
+│   └── session.py                per-run state in ~/.asserten/session.json
+├── examples/sample_agent.json    a runnable demo agent
+└── tests/                        ~185 unit tests
+```
+
+A slash command shells out to `python -m client.cli <subcommand> '<json-args>'`,
+which calls `AssertenClient`, which makes one HTTP request to the backend and
+renders the result as a markdown table. **Session state** (agent_id, the four
+version ids, last eval pass-rates) lives in `~/.asserten/session.json` so each
+command knows what the previous step produced.
+
+## The backend API (what the client calls)
+
+`X-Asserten-Key: <ASSERTEN_API_KEY>` is sent on mutating (POST) requests; GETs are open.
+
+| client method | endpoint |
+|---|---|
+| ingest | `POST /agents/draft` |
+| audit | `POST /agents/draft/{id}/audit` |
+| select | `POST /agents/draft/{id}/commit` |
+| prepare-eval | `POST /agents/{id}/versions/{v}/contract/generate` + `…/test-cases/generate?count=N` |
+| byoe / add / skip | `POST …/test-cases/{byoe,user-provided,skip,unskip}` |
+| eval | `POST /agents/{id}/versions/{v}/eval-runs` |
+| optimize | `POST /agents/{id}/optimize/light` · `…/improvements/apply` (DEEP, via job poll) |
+| scenarios | `GET /agents/{id}/versions/{v}/scenarios` |
+| approve | `POST …/test-cases/{approve,unapprove}` |
+| deploy-gate | `POST /agents/{id}/versions/{cand}/deploy-gate?baseline_version_id=X&strict=true` |
+
+Example — ingest body (`examples/sample_agent.json`):
+
+```json
+{
+  "name": "Customer Support Agent (sample)",
+  "raw_system_prompt": "You are a polite customer-support assistant...",
+  "tool_schemas": [{"name": "lookup_order", "description": "...", "parameters": {...}}],
+  "business_goal": "Resolve order/refund questions without over-refunding."
+}
+```
+
+Example — deploy-gate response:
+
+```json
+{
+  "verdict": "BLOCKED",
+  "approved_count": 11,
+  "regressions": [{"scenario_name": "Refund within policy",
+                   "baseline_status": "passed", "candidate_status": "failed",
+                   "failure_origin": "agent"}],
+  "judge_inconclusive": [], "stable_pass": [...], "reason": "1 approved scenario regressed: ..."
+}
+```
 
 ## Limits in v0.1
 
-- **Failures view is a stub** — relies on the eval summary's `failed/total` count rather than per-case detail. The `eval_results` endpoint is on the backend roadmap.
-- **LIGHT requires K pre-existing candidate v1s.** v0.1 doesn't auto-bulk-audit — you either reuse an existing audit study or populate `candidate_v1_ids` manually in `~/.asserten/session.json`. v0.2 ships `/asserten-audit-bulk K=10` to fix this.
-- **DEEP optimize requires you to pass `eval_run_id` from the prior `/asserten-eval v1` output.** v0.2 will auto-resolve this.
-- **Single-active-session model.** Run on one agent at a time. Use `/asserten-reset` to switch.
+- **LIGHT optimize needs K pre-existing candidate v1s** — v0.1 doesn't auto-bulk-audit;
+  reuse an audit study or set `candidate_v1_ids` in `~/.asserten/session.json`.
+- **DEEP optimize wants the `eval_run_id`** from the prior `/asserten-eval v1` output.
+- **Single active session** — one agent at a time; `/asserten-reset` to switch.
+- **Deploy-gate** requires both versions to have an eval (or pass `auto_eval=true`,
+  the default, to generate one on the fly).
 
 ## Development
 
 ```bash
 pip install -e ".[test]"
-pytest -v                                       # 60 unit tests, ~1.5s
+pytest -q                                        # ~185 unit tests, ~2s
+# E2E against a real backend:
 ASSERTEN_E2E_BACKEND_URL=http://localhost:8000 \
-  ASSERTEN_E2E_AGENT_ID=<id> \
-  ASSERTEN_E2E_VERSION_ID=<vid> \
-  pytest tests/test_e2e_smoke.py -v             # 4 E2E tests against real backend
+  ASSERTEN_E2E_AGENT_ID=<id> ASSERTEN_E2E_VERSION_ID=<vid> \
+  pytest tests/test_e2e_smoke.py -v
 ```
 
 `PROJECT_KNOWLEDGE.md` has architecture decisions, layout, and chronological history.
