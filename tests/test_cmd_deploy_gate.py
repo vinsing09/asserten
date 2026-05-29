@@ -96,7 +96,7 @@ def test_deploy_gate_blocked_shows_regression_table(session_full, monkeypatch):
     stub = _StubClient(result=result)
     _patch_client(monkeypatch, stub)
 
-    out = cmd_deploy_gate({})  # defaults candidate=v2b, baseline=v1
+    out = cmd_deploy_gate({})  # defaults candidate=v2b, baseline auto (None)
 
     assert "🛑 BLOCKED" in out
     assert "Regressions" in out
@@ -104,7 +104,8 @@ def test_deploy_gate_blocked_shows_regression_table(session_full, monkeypatch):
     assert "passed → failed" in out
     assert "agent" in out
     assert "denied a valid refund" in out
-    assert stub.calls[0] == ("a1", "v2bid", "v1id")
+    # baseline omitted → None forwarded (backend auto-resolves)
+    assert stub.calls[0] == ("a1", "v2bid", None)
 
 
 def test_deploy_gate_no_eval_400_surfaced_friendly(session_full, monkeypatch):
@@ -162,6 +163,41 @@ def test_deploy_gate_auto_eval_defaults_true(session_full, monkeypatch):
     _patch_client(monkeypatch, stub)
     cmd_deploy_gate({"candidate": "v2b", "baseline": "v1"})
     assert stub.kwargs_calls[-1].get("auto_eval") is True
+
+
+def test_deploy_gate_omitted_baseline_forwards_none(session_full, monkeypatch):
+    """C2: no baseline arg → None forwarded so the backend auto-resolves."""
+    result = GateResult(verdict="PASSED", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=1, reason="ok")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b"})  # no baseline
+    assert stub.calls[-1][2] is None
+
+
+def test_deploy_gate_baseline_auto_token_forwards_none(session_full, monkeypatch):
+    result = GateResult(verdict="PASSED", candidate_version_id="v2bid",
+                        baseline_version_id="v1id", approved_count=1, reason="ok")
+    stub = _StubClient(result=result)
+    _patch_client(monkeypatch, stub)
+    cmd_deploy_gate({"candidate": "v2b", "baseline": "auto"})
+    assert stub.calls[-1][2] is None
+
+
+def test_api_omits_baseline_param_when_none(monkeypatch):
+    """C2: api layer drops baseline_version_id from query params when None."""
+    from client.api import AssertenClient
+    captured = {}
+    c = AssertenClient(backend_url="http://x", api_key="k")
+    def _fake_request(method, path, **kw):
+        captured["params"] = kw.get("params", {})
+        return {"verdict": "PASSED", "candidate_version_id": "c",
+                "baseline_version_id": "b", "approved_count": 0, "reason": "ok"}
+    monkeypatch.setattr(c, "_request", _fake_request)
+    c.run_deploy_gate("a1", "cand", baseline_version_id=None)
+    assert "baseline_version_id" not in captured["params"]
+    c.run_deploy_gate("a1", "cand", baseline_version_id="v1")
+    assert captured["params"]["baseline_version_id"] == "v1"
 
 
 def test_deploy_gate_passed_no_approved(session_full, monkeypatch):

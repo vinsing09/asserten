@@ -706,18 +706,28 @@ def cmd_scenarios(args: dict) -> str:
 
 
 def cmd_deploy_gate(args: dict) -> str:
-    """args: {candidate?: v2b, baseline?: v1}."""
+    """args: {candidate?: v2b, baseline?: v1|auto}.
+
+    Omit `baseline` (or pass `auto`) to let the backend compare against the
+    previous eval'd version automatically."""
     state = load_session()
     if not state.agent_id:
         return "No agent in session. Run `/asserten-ingest` first."
 
     candidate_alias = args.get("candidate") or "v2b"
-    baseline_alias = args.get("baseline") or "v1"
     try:
         _, cand_vid = _resolve_target_version(state, candidate_alias)
-        _, base_vid = _resolve_target_version(state, baseline_alias)
     except ValueError as exc:
         return f"⚠ {exc}"
+
+    # baseline is optional — None lets the backend auto-resolve it.
+    baseline_arg = args.get("baseline")
+    base_vid = None
+    if baseline_arg and str(baseline_arg).strip().lower() != "auto":
+        try:
+            _, base_vid = _resolve_target_version(state, baseline_arg)
+        except ValueError as exc:
+            return f"⚠ {exc}"
 
     auto_eval = args.get("auto_eval", True)
     strict = args.get("strict", True)

@@ -246,7 +246,7 @@ class AssertenClient:
         self,
         agent_id: str,
         candidate_version_id: str,
-        baseline_version_id: str,
+        baseline_version_id: str | None = None,
         auto_eval: bool = True,
         strict: bool = True,
     ) -> GateResult:
@@ -259,14 +259,13 @@ class AssertenClient:
 
         auto_eval (default True): if a side has no eval run, the backend creates
         one before comparing instead of returning 400 (so it can take a while)."""
+        params = {"auto_eval": auto_eval, "strict": strict}
+        if baseline_version_id is not None:
+            params["baseline_version_id"] = baseline_version_id
         d = self._request(
             "POST",
             f"/agents/{agent_id}/versions/{candidate_version_id}/deploy-gate",
-            params={
-                "baseline_version_id": baseline_version_id,
-                "auto_eval": auto_eval,
-                "strict": strict,
-            },
+            params=params,
             timeout=600,
         )
         return GateResult.from_api(d)
