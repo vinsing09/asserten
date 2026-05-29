@@ -1,6 +1,6 @@
 {
   "name": "asserten",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Drive an agentops-backend agent through contract → tests → audit → patch select → eval → LIGHT/DEEP optimize → 4-way compare. All steps as /asserten-* slash commands.",
   "author": {
     "name": "asserten"
